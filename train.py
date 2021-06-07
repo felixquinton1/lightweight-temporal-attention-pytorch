@@ -166,8 +166,8 @@ def main(config):
     extra = 'geomfeat' if config['geomfeat'] else None
 
     # We only consider the subset of classes with more than 100 samples in the S2-Agri dataset
-    subset = [1, 3, 4, 5, 6, 8, 9, 12, 13, 14, 16, 18, 19, 23, 28, 31, 33, 34, 36, 39]
-
+    # subset = [1, 3, 4, 5, 6, 8, 9, 12, 13, 14, 16, 18, 19, 23, 28, 31, 33, 34, 36, 39]
+    subset = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
     if config['preload']:
         dt = PixelSetData_preloaded(config['dataset_folder'], labels='label_44class', npixel=config['npixel'],
                                     sub_classes=subset,
