@@ -162,7 +162,8 @@ def main(config):
     torch.manual_seed(config['rdm_seed'])
     prepare_output(config)
 
-    mean_std = pkl.load(open(config['dataset_folder'] + '/S2-2017-T31TFM-meanstd.pkl', 'rb'))
+    # mean_std = pkl.load(open(config['dataset_folder'] + '/S2-2017-T31TFM-meanstd.pkl', 'rb'))
+    mean_std = pkl.load(open(config['dataset_folder'] + '/normvals_2018.pkl', 'rb'))
     extra = 'geomfeat' if config['geomfeat'] else None
 
     # We only consider the subset of classes with more than 100 samples in the S2-Agri dataset
