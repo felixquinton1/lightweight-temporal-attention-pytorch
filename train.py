@@ -107,13 +107,13 @@ def get_loaders(dt, kfold, config):
 
         train_loader = data.DataLoader(dt, batch_size=config['batch_size'],
                                        sampler=train_sampler,
-                                       num_workers=config['num_workers'])
+                                       num_workers=config['num_workers'],drop_last=True)
         validation_loader = data.DataLoader(dt, batch_size=config['batch_size'],
                                             sampler=validation_sampler,
-                                            num_workers=config['num_workers'])
+                                            num_workers=config['num_workers'],drop_last=True)
         test_loader = data.DataLoader(dt, batch_size=config['batch_size'],
                                       sampler=test_sampler,
-                                      num_workers=config['num_workers'])
+                                      num_workers=config['num_workers'],drop_last=True)
 
         loader_seq.append((train_loader, validation_loader, test_loader))
     return loader_seq
@@ -168,9 +168,11 @@ def main(config):
 
     # We only consider the subset of classes with more than 100 samples in the S2-Agri dataset
     # subset = [1, 3, 4, 5, 6, 8, 9, 12, 13, 14, 16, 18, 19, 23, 28, 31, 33, 34, 36, 39]
-    subset = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+    # subset = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+    subset = None
     if config['preload']:
-        dt = PixelSetData_preloaded(config['dataset_folder'], labels='label_44class', npixel=config['npixel'],
+        # dt = PixelSetData_preloaded(config['dataset_folder'], labels='label_44class', npixel=config['npixel'],
+        dt = PixelSetData_preloaded(config['dataset_folder'], labels='CODE9_2018', npixel=config['npixel'],
                                     sub_classes=subset,
                                     norm=mean_std,
                                     extra_feature=extra)
@@ -313,7 +315,7 @@ if __name__ == '__main__':
     parser.add_argument('--input_dim', default=10, type=int, help='Number of channels of input images')
     parser.add_argument('--mlp1', default='[10,32,64]', type=str, help='Number of neurons in the layers of MLP1')
     parser.add_argument('--pooling', default='mean_std', type=str, help='Pixel-embeddings pooling strategy')
-    parser.add_argument('--mlp2', default='[132,128]', type=str, help='Number of neurons in the layers of MLP2')
+    parser.add_argument('--mlp2', default='[128,128]', type=str, help='Number of neurons in the layers of MLP2')
     parser.add_argument('--geomfeat', default=1, type=int,
                         help='If 1 the precomputed geometrical features (f) are used in the PSE.')
 
@@ -324,7 +326,7 @@ if __name__ == '__main__':
     parser.add_argument('--T', default=1000, type=int, help='Maximum period for the positional encoding')
     parser.add_argument('--positions', default='bespoke', type=str,
                         help='Positions to use for the positional encoding (bespoke / order)')
-    parser.add_argument('--lms', default=24, type=int,
+    parser.add_argument('--lms', default=36, type=int,
                         help='Maximum sequence length for positional encoding (only necessary if positions == order)')
     parser.add_argument('--dropout', default=0.2, type=float, help='Dropout probability')
     parser.add_argument('--d_model', default=256, type=int,
@@ -332,8 +334,8 @@ if __name__ == '__main__':
                         )
 
     ## Classifier
-    parser.add_argument('--num_classes', default=20, type=int, help='Number of classes')
-    parser.add_argument('--mlp4', default='[128, 64, 32, 20]', type=str, help='Number of neurons in the layers of MLP4')
+    parser.add_argument('--num_classes', default=24, type=int, help='Number of classes')
+    parser.add_argument('--mlp4', default='[128, 64, 32, 24]', type=str, help='Number of neurons in the layers of MLP4')
 
     ## Other methods (use one of the flags tae/gru/tcnn to train respectively a TAE, GRU or TempCNN instead of an L-TAE)
     ## see paper appendix for hyperparameters

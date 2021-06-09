@@ -1,0 +1,55 @@
+{
+    "dataset_folder": "/home/FQuinton/Bureau/data_pse",
+    "res_dir": "./results",
+    "num_workers": 8,
+    "rdm_seed": 1,
+    "device": "cuda",
+    "display_step": 50,
+    "preload": false,
+    "kfold": 5,
+    "epochs": 100,
+    "batch_size": 128,
+    "lr": 0.001,
+    "gamma": 1,
+    "npixel": 64,
+    "input_dim": 10,
+    "mlp1": [
+        10,
+        32,
+        64
+    ],
+    "pooling": "mean_std",
+    "mlp2": [
+        128,
+        128
+    ],
+    "geomfeat": 0,
+    "n_head": 16,
+    "d_k": 8,
+    "mlp3": [
+        256,
+        128
+    ],
+    "T": 1000,
+    "positions": "bespoke",
+    "lms": 36,
+    "dropout": 0.2,
+    "d_model": 256,
+    "num_classes": 24,
+    "mlp4": [
+        128,
+        64,
+        32,
+        24
+    ],
+    "tae": false,
+    "gru": false,
+    "hidden_dim": 156,
+    "tcnn": false,
+    "nker": [
+        32,
+        32,
+        128
+    ],
+    "N_params": 148888
+}

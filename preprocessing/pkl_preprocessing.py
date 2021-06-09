@@ -28,12 +28,6 @@ for i in range(len(dir)):
     avg_tot = np.add(avg_tot, avg)
     avg = np.divide(avg, l_pixels)
     avg_square = np.divide(avg_square, l_pixels)
-    # for band in avg:
-    #     band = band / l_pixels
-    #
-    # avg_tot_square = np.add(avg_tot_square, avg_square)
-    # for band in avg_square:
-    #     band = band / l_pixels
 
     std = np.sqrt(np.add(avg_square, -np.square(avg)))
     norm = (avg.tolist(), std.tolist())
@@ -48,11 +42,6 @@ for i in range(len(dir)):
 
 avg_tot = np.divide(avg, l_pixels)
 avg_tot_square = np.divide(avg_square, l_pixels)
-# for band in avg_tot:
-#     band = band / l_pixels_tot
-#
-# for band in avg_tot_square:
-#     band = band / l_pixels_tot
 
 std_tot = np.sqrt(np.add(avg_tot_square, -np.square(avg_tot)))
 norm = (avg_tot.tolist(), std_tot.tolist())

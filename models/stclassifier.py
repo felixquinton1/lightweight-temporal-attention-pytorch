@@ -15,7 +15,7 @@ class PseLTae(nn.Module):
     Pixel-Set encoder + Lightweight Temporal Attention Encoder sequence classifier
     """
 
-    def __init__(self, input_dim=10, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[132, 128], with_extra=True,
+    def __init__(self, input_dim=10, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[128, 128], with_extra=True,
                  extra_size=4,
                  n_head=16, d_k=8, d_model=256, mlp3=[256, 128], dropout=0.2, T=1000, len_max_seq=24, positions=None,
                  mlp4=[128, 64, 32, 20], return_att=False):

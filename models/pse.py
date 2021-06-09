@@ -11,7 +11,7 @@ import copy
 
 
 class PixelSetEncoder(nn.Module):
-    def __init__(self, input_dim, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[64, 128], with_extra=True,
+    def __init__(self, input_dim, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[128, 128], with_extra=True,
                  extra_size=4):
         """
         Pixel-set encoder.
@@ -48,6 +48,7 @@ class PixelSetEncoder(nn.Module):
             inter_dim += self.extra_size
 
         assert (input_dim == mlp1[0])
+        print("inter_dim: {}, mlp2 :{}".format(inter_dim, mlp2[0]))
         assert (inter_dim == mlp2[0])
         # Feature extraction
         layers = []

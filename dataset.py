@@ -29,7 +29,7 @@ class PixelSetData(data.Dataset):
         super(PixelSetData, self).__init__()
 
         self.folder = folder
-        self.data_folder = os.path.join(folder, 'DATA/2018')
+        self.data_folder = os.path.join(folder, 'DATA','2018')
         self.meta_folder = os.path.join(folder, 'META')
         self.labels = labels
         self.npixel = npixel
@@ -40,10 +40,11 @@ class PixelSetData(data.Dataset):
         self.return_id = return_id
 
         l = [f for f in os.listdir(self.data_folder) if f.endswith('.npy')]
-        self.pid = [int(f.split('.')[0]) for f in l]
+        self.pid = [str(f.split('.')[0]) for f in l]
         self.pid = list(np.sort(self.pid))
 
         self.pid = list(map(str, self.pid))
+
         self.len = len(self.pid)
 
         # Get Labels
@@ -57,15 +58,17 @@ class PixelSetData(data.Dataset):
             self.target = []
             for i, p in enumerate(self.pid):
                 # t = d[labels][p]
-                if(int(p) > 100000000000000):
-                    t = d['CODE9_2018']['0' + p]
-                else:
-                    t = d['CODE9_2018']['00' + p]
+                # if(int(p) > 100000000000000):
+                #     t = d['CODE9_2018']['0' + p]
+                # else:
+                #     t = d['CODE9_2018']['00' + p]
+                t= d['CODE9_2018'][p]
                 self.target.append(t)
                 if sub_classes is not None:
                     if t in sub_classes:
                         sub_indices.append(i)
                         self.target[-1] = convert[self.target[-1]]
+
         if sub_classes is not None:
             self.pid = list(np.array(self.pid)[sub_indices])
             self.target = list(np.array(self.target)[sub_indices])
