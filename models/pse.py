@@ -48,7 +48,6 @@ class PixelSetEncoder(nn.Module):
             inter_dim += self.extra_size
 
         assert (input_dim == mlp1[0])
-        print("inter_dim: {}, mlp2 :{}".format(inter_dim, mlp2[0]))
         assert (inter_dim == mlp2[0])
         # Feature extraction
         layers = []

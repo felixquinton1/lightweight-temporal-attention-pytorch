@@ -188,7 +188,7 @@ if __name__ == "__main__":
         with rasterio.open(in_band_1) as band_1:
             kwds = band_1.profile
         scale = 2
-        kwds.update(count=len(out_bands), dtype='int16')
+        kwds.update(count=len(out_bands), dtype='uint16')
         with rasterio.open('/mnt/71A36E2C77574D51/preprocess/tif/' + tif_name + '.tif', 'w', **kwds) as dest:
         # with rasterio.open('C:/Users/felix/OneDrive/Bureau/test/out/preproj/' + tif_name + '.tif', 'w', **kwds) as dest:
             for idx, band in enumerate(out_bands):

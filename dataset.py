@@ -11,7 +11,7 @@ import json
 
 
 class PixelSetData(data.Dataset):
-    def __init__(self, folder, labels, npixel, sub_classes=None, norm=None,
+    def __init__(self, folder, labels, npixel, year=None, sub_classes=None, norm=None,
                  extra_feature=None, jitter=(0.01, 0.05), return_id=False):
         """
 
@@ -29,7 +29,7 @@ class PixelSetData(data.Dataset):
         super(PixelSetData, self).__init__()
 
         self.folder = folder
-        self.data_folder = os.path.join(folder, 'DATA','2018')
+        self.data_folder = os.path.join(folder, 'DATA', year[0])
         self.meta_folder = os.path.join(folder, 'META')
         self.labels = labels
         self.npixel = npixel
@@ -57,12 +57,7 @@ class PixelSetData(data.Dataset):
             d = json.loads(file.read())
             self.target = []
             for i, p in enumerate(self.pid):
-                # t = d[labels][p]
-                # if(int(p) > 100000000000000):
-                #     t = d['CODE9_2018']['0' + p]
-                # else:
-                #     t = d['CODE9_2018']['00' + p]
-                t= d['CODE9_2018'][p]
+                t = d[labels][p]
                 self.target.append(t)
                 if sub_classes is not None:
                     if t in sub_classes:
@@ -105,7 +100,8 @@ class PixelSetData(data.Dataset):
                 Extra-features : Sequence_length x Number of additional features
 
         """
-        x0 = np.load(os.path.join(self.folder, 'DATA/2018', '{}.npy'.format(self.pid[item])))
+        x0 = np.load(os.path.join(self.folder, 'DATA/2018', '{}.npy'.format(self.pid[item]))).astype('uint16')
+
         y = self.target[item]
 
         if x0.shape[-1] > self.npixel:

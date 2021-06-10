@@ -10,145 +10,127 @@ with open(labels) as f:
     data = json.load(f)
     for key, value in data['CODE9_2018'].items():
         if value == "GRASS_PRE":
-           labels_int['CODE9_2018'][key] = 1
+           labels_int['CODE9_2018'][key] = 0
         elif value == "TRITICA_W":
-           labels_int['CODE9_2018'][key] = 2
+           labels_int['CODE9_2018'][key] = 1
         elif value == "MAIZE":
-           labels_int['CODE9_2018'][key] = 3
+           labels_int['CODE9_2018'][key] = 2
         elif value == "RYE_W":
+           labels_int['CODE9_2018'][key] = 3
+        elif value == "WHEAT_B_W" or value == "WHEAT_D_W" :
            labels_int['CODE9_2018'][key] = 4
-        elif value == "WHEAT_B_W":
-           labels_int['CODE9_2018'][key] = 5
         elif value == "RAPE_W":
-           labels_int['CODE9_2018'][key] = 6
+           labels_int['CODE9_2018'][key] = 5
         elif value == "BARLEY_W":
-           labels_int['CODE9_2018'][key] = 7
+           labels_int['CODE9_2018'][key] = 6
         elif value == "SUNFLOWER":
-           labels_int['CODE9_2018'][key] = 8
+           labels_int['CODE9_2018'][key] = 7
         elif value == "VINEYARD":
-           labels_int['CODE9_2018'][key] = 9
+           labels_int['CODE9_2018'][key] = 8
         elif value == "SOYBEAN":
-           labels_int['CODE9_2018'][key] = 10
+           labels_int['CODE9_2018'][key] = 9
         elif value == "SORGHUM":
-           labels_int['CODE9_2018'][key] = 11
-        elif value == "WHEAT_D_W":
-           labels_int['CODE9_2018'][key] = 12
+           labels_int['CODE9_2018'][key] = 10
         elif value == "ALFALFA":
-           labels_int['CODE9_2018'][key] = 13
+           labels_int['CODE9_2018'][key] = 11
         elif value == "OAT_W":
-           labels_int['CODE9_2018'][key] = 14
+           labels_int['CODE9_2018'][key] = 12
         elif value == "LEGU_FODD":
-           labels_int['CODE9_2018'][key] = 15
+           labels_int['CODE9_2018'][key] = 13
         elif value == "CEREAL_MX":
-           labels_int['CODE9_2018'][key] = 16
+           labels_int['CODE9_2018'][key] = 14
         elif value == "FL_FR_VEG":
-           labels_int['CODE9_2018'][key] = 17
+           labels_int['CODE9_2018'][key] = 15
         elif value == "OAT_S":
-           labels_int['CODE9_2018'][key] = 18
+           labels_int['CODE9_2018'][key] = 16
         elif value == "POTATO":
-           labels_int['CODE9_2018'][key] = 19
+           labels_int['CODE9_2018'][key] = 17
         elif value == "BARLEY_S":
-           labels_int['CODE9_2018'][key] = 20
+           labels_int['CODE9_2018'][key] = 18
         elif value == "WOOD_PAS":
-           labels_int['CODE9_2018'][key] = 21
-        elif value == "NO_EX_SUR":
-           labels_int['CODE9_2018'][key] = 22
-        elif value == "SPELT":
-           labels_int['CODE9_2018'][key] = 23
+           labels_int['CODE9_2018'][key] = 19
     for key, value in data['CODE9_2019'].items():
         if value == "GRASS_PRE":
-           labels_int['CODE9_2019'][key] = 1
+           labels_int['CODE9_2019'][key] = 0
         elif value == "TRITICA_W":
-           labels_int['CODE9_2019'][key] = 2
+           labels_int['CODE9_2019'][key] = 1
         elif value == "MAIZE":
-           labels_int['CODE9_2019'][key] = 3
+           labels_int['CODE9_2019'][key] = 2
         elif value == "RYE_W":
+           labels_int['CODE9_2019'][key] = 3
+        elif value == "WHEAT_B_W" or value == "WHEAT_D_W":
            labels_int['CODE9_2019'][key] = 4
-        elif value == "WHEAT_B_W":
-           labels_int['CODE9_2019'][key] = 5
         elif value == "RAPE_W":
-           labels_int['CODE9_2019'][key] = 6
+           labels_int['CODE9_2019'][key] = 5
         elif value == "BARLEY_W":
-           labels_int['CODE9_2019'][key] = 7
+           labels_int['CODE9_2019'][key] = 6
         elif value == "SUNFLOWER":
-           labels_int['CODE9_2019'][key] = 8
+           labels_int['CODE9_2019'][key] = 7
         elif value == "VINEYARD":
-           labels_int['CODE9_2019'][key] = 9
+           labels_int['CODE9_2019'][key] = 8
         elif value == "SOYBEAN":
-           labels_int['CODE9_2019'][key] = 10
+           labels_int['CODE9_2019'][key] = 9
         elif value == "SORGHUM":
-           labels_int['CODE9_2019'][key] = 11
-        elif value == "WHEAT_D_W":
-           labels_int['CODE9_2019'][key] = 12
+           labels_int['CODE9_2019'][key] = 10
         elif value == "ALFALFA":
-           labels_int['CODE9_2019'][key] = 13
+           labels_int['CODE9_2019'][key] = 11
         elif value == "OAT_W":
-           labels_int['CODE9_2019'][key] = 14
+           labels_int['CODE9_2019'][key] = 12
         elif value == "LEGU_FODD":
-           labels_int['CODE9_2019'][key] = 15
+           labels_int['CODE9_2019'][key] = 13
         elif value == "CEREAL_MX":
-           labels_int['CODE9_2019'][key] = 16
+           labels_int['CODE9_2019'][key] = 14
         elif value == "FL_FR_VEG":
-           labels_int['CODE9_2019'][key] = 17
+           labels_int['CODE9_2019'][key] = 15
         elif value == "OAT_S":
-           labels_int['CODE9_2019'][key] = 18
+           labels_int['CODE9_2019'][key] = 16
         elif value == "POTATO":
-           labels_int['CODE9_2019'][key] = 19
+           labels_int['CODE9_2019'][key] = 17
         elif value == "BARLEY_S":
-           labels_int['CODE9_2019'][key] = 20
+           labels_int['CODE9_2019'][key] = 18
         elif value == "WOOD_PAS":
-           labels_int['CODE9_2019'][key] = 21
-        elif value == "NO_EX_SUR":
-           labels_int['CODE9_2019'][key] = 22
-        elif value == "SPELT":
-           labels_int['CODE9_2020'][key] = 23
+           labels_int['CODE9_2019'][key] = 19
     for key, value in data['CODE9_2020'].items():
         if value == "GRASS_PRE":
-            labels_int['CODE9_2020'][key] = 1
+            labels_int['CODE9_2020'][key] = 0
         elif value == "TRITICA_W":
-            labels_int['CODE9_2020'][key] = 2
+            labels_int['CODE9_2020'][key] = 1
         elif value == "MAIZE":
-            labels_int['CODE9_2020'][key] = 3
+            labels_int['CODE9_2020'][key] = 2
         elif value == "RYE_W":
+            labels_int['CODE9_2020'][key] = 3
+        elif value == "WHEAT_B_W" or value == "WHEAT_D_W":
             labels_int['CODE9_2020'][key] = 4
-        elif value == "WHEAT_B_W":
-            labels_int['CODE9_2020'][key] = 5
         elif value == "RAPE_W":
-            labels_int['CODE9_2020'][key] = 6
+            labels_int['CODE9_2020'][key] = 5
         elif value == "BARLEY_W":
-            labels_int['CODE9_2020'][key] = 7
+            labels_int['CODE9_2020'][key] = 6
         elif value == "SUNFLOWER":
-            labels_int['CODE9_2020'][key] = 8
+            labels_int['CODE9_2020'][key] = 7
         elif value == "VINEYARD":
-            labels_int['CODE9_2020'][key] = 9
+            labels_int['CODE9_2020'][key] = 8
         elif value == "SOYBEAN":
-            labels_int['CODE9_2020'][key] = 10
+            labels_int['CODE9_2020'][key] = 9
         elif value == "SORGHUM":
-            labels_int['CODE9_2020'][key] = 11
-        elif value == "WHEAT_D_W":
-            labels_int['CODE9_2020'][key] = 12
+            labels_int['CODE9_2020'][key] = 10
         elif value == "ALFALFA":
-            labels_int['CODE9_2020'][key] = 13
+            labels_int['CODE9_2020'][key] = 11
         elif value == "OAT_W":
-            labels_int['CODE9_2020'][key] = 14
+            labels_int['CODE9_2020'][key] = 12
         elif value == "LEGU_FODD":
-            labels_int['CODE9_2020'][key] = 15
+            labels_int['CODE9_2020'][key] = 13
         elif value == "CEREAL_MX":
-            labels_int['CODE9_2020'][key] = 16
+            labels_int['CODE9_2020'][key] = 14
         elif value == "FL_FR_VEG":
-            labels_int['CODE9_2020'][key] = 17
+            labels_int['CODE9_2020'][key] = 15
         elif value == "OAT_S":
-            labels_int['CODE9_2020'][key] = 18
+            labels_int['CODE9_2020'][key] = 16
         elif value == "POTATO":
-            labels_int['CODE9_2020'][key] = 19
+            labels_int['CODE9_2020'][key] = 17
         elif value == "BARLEY_S":
-            labels_int['CODE9_2020'][key] = 20
+            labels_int['CODE9_2020'][key] = 18
         elif value == "WOOD_PAS":
-            labels_int['CODE9_2020'][key] = 21
-        elif value == "NO_EX_SUR":
-            labels_int['CODE9_2020'][key] = 22
-        elif value == "SPELT":
-            labels_int['CODE9_2020'][key] = 23
+            labels_int['CODE9_2020'][key] = 19
 with open('/home/FQuinton/Bureau/data_pse/META/labels_int.json',
           'w') as file:
     file.write(json.dumps(labels_int, indent=4))

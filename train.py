@@ -162,7 +162,6 @@ def main(config):
     torch.manual_seed(config['rdm_seed'])
     prepare_output(config)
 
-    # mean_std = pkl.load(open(config['dataset_folder'] + '/S2-2017-T31TFM-meanstd.pkl', 'rb'))
     mean_std = pkl.load(open(config['dataset_folder'] + '/normvals_2018.pkl', 'rb'))
     extra = 'geomfeat' if config['geomfeat'] else None
 
@@ -171,16 +170,15 @@ def main(config):
     # subset = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
     subset = None
     if config['preload']:
-        # dt = PixelSetData_preloaded(config['dataset_folder'], labels='label_44class', npixel=config['npixel'],
         dt = PixelSetData_preloaded(config['dataset_folder'], labels='CODE9_2018', npixel=config['npixel'],
                                     sub_classes=subset,
                                     norm=mean_std,
                                     extra_feature=extra)
     else:
-        dt = PixelSetData(config['dataset_folder'], labels='label_44class', npixel=config['npixel'],
+        dt = PixelSetData(config['dataset_folder'], labels='CODE9_2018', npixel=config['npixel'],
                           sub_classes=subset,
                           norm=mean_std,
-                          extra_feature=extra)
+                          extra_feature=extra, year=year)
     device = torch.device(config['device'])
 
     loaders = get_loaders(dt, config['kfold'], config)
@@ -280,7 +278,8 @@ def main(config):
         print('Loss {:.4f},  Acc {:.2f},  IoU {:.4f}'.format(test_metrics['test_loss'], test_metrics['test_accuracy'],
                                                              test_metrics['test_IoU']))
         save_results(fold + 1, test_metrics, conf_mat, config)
-
+        # 1 fold (no cross validation)
+        break
     overall_performance(config)
 
 
@@ -290,6 +289,8 @@ if __name__ == '__main__':
 
     # Set-up parameters
     parser.add_argument('--dataset_folder', default='', type=str,
+                        help='Path to the folder where the results are saved.')
+    parser.add_argument('--year', default=['2018'], type=str,
                         help='Path to the folder where the results are saved.')
     parser.add_argument('--res_dir', default='./results', help='Path to the folder where the results should be stored')
     parser.add_argument('--num_workers', default=8, type=int, help='Number of data loading workers')
@@ -315,7 +316,7 @@ if __name__ == '__main__':
     parser.add_argument('--input_dim', default=10, type=int, help='Number of channels of input images')
     parser.add_argument('--mlp1', default='[10,32,64]', type=str, help='Number of neurons in the layers of MLP1')
     parser.add_argument('--pooling', default='mean_std', type=str, help='Pixel-embeddings pooling strategy')
-    parser.add_argument('--mlp2', default='[128,128]', type=str, help='Number of neurons in the layers of MLP2')
+    parser.add_argument('--mlp2', default='[132,128]', type=str, help='Number of neurons in the layers of MLP2')
     parser.add_argument('--geomfeat', default=1, type=int,
                         help='If 1 the precomputed geometrical features (f) are used in the PSE.')
 
@@ -334,8 +335,8 @@ if __name__ == '__main__':
                         )
 
     ## Classifier
-    parser.add_argument('--num_classes', default=24, type=int, help='Number of classes')
-    parser.add_argument('--mlp4', default='[128, 64, 32, 24]', type=str, help='Number of neurons in the layers of MLP4')
+    parser.add_argument('--num_classes', default=23, type=int, help='Number of classes')
+    parser.add_argument('--mlp4', default='[128, 64, 32, 23]', type=str, help='Number of neurons in the layers of MLP4')
 
     ## Other methods (use one of the flags tae/gru/tcnn to train respectively a TAE, GRU or TempCNN instead of an L-TAE)
     ## see paper appendix for hyperparameters

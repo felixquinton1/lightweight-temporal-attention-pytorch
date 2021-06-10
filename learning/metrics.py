@@ -56,11 +56,18 @@ def confusion_matrix_analysis(mat):
         tp = np.sum(mat[j, j])
         fp = np.sum(mat[:, j]) - tp
         fn = np.sum(mat[j, :]) - tp
+        if tp != 0:
+            d['IoU'] = tp / (tp + fp + fn)
+            d['Precision'] = tp / (tp + fp)
+            d['Recall'] = tp / (tp + fn)
+            d['F1-score'] = 2 * tp / (2 * tp + fp + fn)
 
-        d['IoU'] = tp / (tp + fp + fn)
-        d['Precision'] = tp / (tp + fp)
-        d['Recall'] = tp / (tp + fn)
-        d['F1-score'] = 2 * tp / (2 * tp + fp + fn)
+        else:
+            d['IoU'] = 0
+            d['Precision'] = 0
+            d['Recall'] = 0
+            d['F1-score'] = 0
+
 
         per_class[str(j)] = d
 
@@ -69,10 +76,17 @@ def confusion_matrix_analysis(mat):
         FN += fn
 
     overall = {}
-    overall['micro_IoU'] = TP / (TP + FP + FN)
-    overall['micro_Precision'] = TP / (TP + FP)
-    overall['micro_Recall'] = TP / (TP + FN)
-    overall['micro_F1-score'] = 2 * TP / (2 * TP + FP + FN)
+    if TP !=0:
+        overall['micro_IoU'] = TP / (TP + FP + FN)
+        overall['micro_Precision'] = TP / (TP + FP)
+        overall['micro_Recall'] = TP / (TP + FN)
+        overall['micro_F1-score'] = 2 * TP / (2 * TP + FP + FN)
+
+    else:
+        overall['micro_IoU'] = 0
+        overall['micro_Precision'] = 0
+        overall['micro_Recall'] = 0
+        overall['micro_F1-score'] = 0
 
     macro = pd.DataFrame(per_class).transpose().mean()
     overall['MACRO_IoU'] = macro.loc['IoU']

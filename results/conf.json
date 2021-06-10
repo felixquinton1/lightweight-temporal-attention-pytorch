@@ -20,10 +20,10 @@
     ],
     "pooling": "mean_std",
     "mlp2": [
-        128,
+        132,
         128
     ],
-    "geomfeat": 0,
+    "geomfeat": 1,
     "n_head": 16,
     "d_k": 8,
     "mlp3": [
@@ -35,12 +35,12 @@
     "lms": 36,
     "dropout": 0.2,
     "d_model": 256,
-    "num_classes": 24,
+    "num_classes": 23,
     "mlp4": [
         128,
         64,
         32,
-        24
+        23
     ],
     "tae": false,
     "gru": false,
@@ -51,5 +51,5 @@
         32,
         128
     ],
-    "N_params": 148888
+    "N_params": 149367
 }
