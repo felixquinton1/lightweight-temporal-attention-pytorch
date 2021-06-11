@@ -1,11 +1,11 @@
 {
-    "micro_IoU": 0.8768328445747801,
-    "micro_Precision": 0.934375,
-    "micro_Recall": 0.934375,
-    "micro_F1-score": 0.934375,
-    "MACRO_IoU": 0.39340235285448977,
-    "MACRO_Precision": 0.6730763387929727,
-    "MACRO_Recall": 0.4423260916212206,
-    "MACRO_F1-score": 0.47918939410405065,
-    "Accuracy": 0.934375
+    "micro_IoU": 0.8072314912885892,
+    "micro_Precision": 0.8933349105299381,
+    "micro_Recall": 0.8933349105299381,
+    "micro_F1-score": 0.8933349105299381,
+    "MACRO_IoU": 0.3633468213521993,
+    "MACRO_Precision": 0.5287066522392507,
+    "MACRO_Recall": 0.43656081171456884,
+    "MACRO_F1-score": 0.4598922875440693,
+    "Accuracy": 0.8933349105299381
 }

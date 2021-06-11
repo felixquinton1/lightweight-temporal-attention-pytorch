@@ -49,7 +49,7 @@ class LTAE(nn.Module):
         if d_model is not None:
             self.d_model = d_model
             self.inconv = nn.Sequential(nn.Conv1d(in_channels, d_model, 1),
-                                        nn.LayerNorm((d_model, len_max_seq)))
+                                        nn.LayerNorm((d_model, len_max_seq), elementwise_affine=False))
         else:
             self.d_model = in_channels
             self.inconv = None
