@@ -173,12 +173,12 @@ def main(config):
         dt = PixelSetData_preloaded(config['dataset_folder'], labels='CODE9_2018', npixel=config['npixel'],
                                     sub_classes=subset,
                                     norm=mean_std,
-                                    extra_feature=extra)
+                                    extra_feature=extra, year=config['year'])
     else:
         dt = PixelSetData(config['dataset_folder'], labels='CODE9_2018', npixel=config['npixel'],
                           sub_classes=subset,
                           norm=mean_std,
-                          extra_feature=extra, year=year)
+                          extra_feature=extra, year=config['year'])
     device = torch.device(config['device'])
 
     loaders = get_loaders(dt, config['kfold'], config)
@@ -335,8 +335,8 @@ if __name__ == '__main__':
                         )
 
     ## Classifier
-    parser.add_argument('--num_classes', default=23, type=int, help='Number of classes')
-    parser.add_argument('--mlp4', default='[128, 64, 32, 23]', type=str, help='Number of neurons in the layers of MLP4')
+    parser.add_argument('--num_classes', default=20, type=int, help='Number of classes')
+    parser.add_argument('--mlp4', default='[128, 64, 32, 20]', type=str, help='Number of neurons in the layers of MLP4')
 
     ## Other methods (use one of the flags tae/gru/tcnn to train respectively a TAE, GRU or TempCNN instead of an L-TAE)
     ## see paper appendix for hyperparameters

@@ -29,6 +29,7 @@ class PixelSetData(data.Dataset):
         super(PixelSetData, self).__init__()
 
         self.folder = folder
+        self.year = year
         self.data_folder = os.path.join(folder, 'DATA', year[0])
         self.meta_folder = os.path.join(folder, 'META')
         self.labels = labels
@@ -100,8 +101,7 @@ class PixelSetData(data.Dataset):
                 Extra-features : Sequence_length x Number of additional features
 
         """
-        x0 = np.load(os.path.join(self.folder, 'DATA/2018', '{}.npy'.format(self.pid[item]))).astype('uint16')
-
+        x0 = np.load(os.path.join(self.folder, 'DATA', self.year[0], '{}.npy'.format(self.pid[item]))).astype('uint16')
         y = self.target[item]
 
         if x0.shape[-1] > self.npixel:
