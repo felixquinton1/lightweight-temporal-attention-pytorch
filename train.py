@@ -59,8 +59,8 @@ def evaluation(model, criterion, loader, device, config, mode='val'):
 
     acc_meter = tnt.meter.ClassErrorMeter(accuracy=True)
     loss_meter = tnt.meter.AverageValueMeter()
-
-    for (x, y) in loader:
+    # for (x, y) in loader:
+    for (x, y) in tqdm(loader):
         y_true.extend(list(map(int, y)))
         x = recursive_todevice(x, device)
         y = y.to(device)
@@ -166,7 +166,7 @@ def main(config):
     torch.manual_seed(config['rdm_seed'])
     prepare_output(config)
 
-    mean_std = pkl.load(open(config['dataset_folder'] + '/normvals_2018.pkl', 'rb'))
+    mean_std = pkl.load(open(config['dataset_folder'] + '/normvals_2019.pkl', 'rb'))
     extra = 'geomfeat' if config['geomfeat'] else None
 
     # We only consider the subset of classes with more than 100 samples in the S2-Agri dataset
@@ -174,12 +174,12 @@ def main(config):
     # subset = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
     subset = None
     if config['preload']:
-        dt = PixelSetData_preloaded(config['dataset_folder'], labels='CODE9_2019', npixel=config['npixel'],
+        dt = PixelSetData_preloaded(config['dataset_folder'], labels='CODE9_2018', npixel=config['npixel'],
                                     sub_classes=subset,
                                     norm=mean_std,
                                     extra_feature=extra)
     else:
-        dt = PixelSetData(config['dataset_folder'], labels='CODE9_2019', npixel=config['npixel'],
+        dt = PixelSetData(config['dataset_folder'], labels='CODE9_2018', npixel=config['npixel'],
                           sub_classes=subset,
                           norm=mean_std,
                           extra_feature=extra, year=config['year'])
@@ -202,21 +202,15 @@ def main(config):
             file.write(json.dumps(config, indent=4))
         model = model.to(device)
         model.apply(weight_init)
-        # optimizer = torch.optim.Adam(model.parameters())
         criterion = FocalLoss(config['gamma'])
 
         new_state_dict = torch.load(config['loaded_model'])
         model_dict = {k:v for k,v in model.state_dict().items() if k!='temporal_encoder.position_enc.weight'}
-        model_dict2 = {k: v for k, v in model.state_dict().items()}
+        model_dict_copy = {k: v for k, v in model.state_dict().items()}
         compatible_dict = {k: v for k, v in new_state_dict['state_dict'].items() if k in model_dict}
-        model_dict2.update(compatible_dict)
+        model_dict_copy.update(compatible_dict)
 
-        model.load_state_dict(model_dict2)
-
-
-        #sd['temporal_encoder.position_enc.weight'] =
-        # state_dict = {k:v for k,v in sd.items() if k!='temporal_encoder.position_enc.weight'}
-        # model.load_state_dict(state_dict)
+        model.load_state_dict(model_dict_copy)
         model.eval()
 
         test_metrics, conf_mat = evaluation(model, criterion, loader, device=device, mode='test', config=config)
@@ -348,9 +342,9 @@ if __name__ == '__main__':
                         help='If specified, the whole dataset is loaded to RAM at initialization')
     parser.set_defaults(preload=False)
 
-    parser.add_argument('--test_mode', default=False, type=bool,
+    parser.add_argument('--test_mode', default=True, type=bool,
                         help='Load a pre-trained model and test on the whole data set')
-    parser.add_argument('--loaded_model', default='/home/FQuinton/Bureau/results/2018_geomfeat_1_20_class/Fold_1/model.pth.tar', type=str,
+    parser.add_argument('--loaded_model', default='/home/FQuinton/Bureau/results/2019_geomfeat_1_20_class_affine/Fold_1/model.pth.tar', type=str,
                         help='Path to the pre-trained model')
     # Training parameters
     parser.add_argument('--kfold', default=5, type=int, help='Number of folds for cross validation')
