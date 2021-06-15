@@ -41,7 +41,7 @@ class PixelSetData(data.Dataset):
         self.return_id = return_id
 
         l = [f for f in os.listdir(self.data_folder) if f.endswith('.npy')]
-        self.pid = [str(f.split('.')[0]) for f in l]
+        self.pid = [str(f.split('.')[0]) + "_" + year for f in l]
         self.pid = list(np.sort(self.pid))
 
         self.pid = list(map(str, self.pid))
@@ -58,7 +58,7 @@ class PixelSetData(data.Dataset):
             d = json.loads(file.read())
             self.target = []
             for i, p in enumerate(self.pid):
-                t = d[labels][p]
+                t = d[labels][p[:-5]]
                 self.target.append(t)
                 if sub_classes is not None:
                     if t in sub_classes:
@@ -101,7 +101,7 @@ class PixelSetData(data.Dataset):
                 Extra-features : Sequence_length x Number of additional features
 
         """
-        x0 = np.load(os.path.join(self.folder, 'DATA', self.year, '{}.npy'.format(self.pid[item]))).astype('uint16')
+        x0 = np.load(os.path.join(self.folder, 'DATA', self.year, '{}.npy'.format(self.pid[item][:-5]))).astype('uint16')
         y = self.target[item]
 
         if x0.shape[-1] > self.npixel:
@@ -149,7 +149,7 @@ class PixelSetData(data.Dataset):
         data = (Tensor(x), Tensor(mask))
 
         if self.extra_feature is not None:
-            ef = (self.extra[str(self.pid[item])] - self.extra_m) / self.extra_s
+            ef = (self.extra[str(self.pid[item][:-5])] - self.extra_m) / self.extra_s
             ef = torch.from_numpy(ef).float()
 
             ef = torch.stack([ef for _ in range(data[0].shape[0])], dim=0)
