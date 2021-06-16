@@ -87,7 +87,7 @@ def evaluation(model, criterion, loader, device, config, mode='val'):
 
 np_str_obj_array_pattern = re.compile(r'[SaUO]')
 
-def pad_tensor(x, l, pad_value=1):
+def pad_tensor(x, l, pad_value=0):
     padlen = l - x.shape[0]
     pad = [0 for _ in range(2 * len(x.shape[1:]))] + [0, padlen]
     return F.pad(x, pad=pad, value=pad_value)
@@ -339,26 +339,32 @@ def main(config):
 
             for year, i in enumerate(test_loader):
                 print("Année: {} ".format(config['year'][year]))
-
-                new_state_dict = torch.load(os.path.join(config['res_dir'], 'Fold_{}'.format(fold + 1), 'model.pth.tar'))[
-                        'state_dict']
-                model_dict = {k: v for k, v in model.state_dict().items() if
+                model_config['len_max_seq'] = config['sly'][config['year'][year]]
+                model_test = PseLTae(**model_config)
+                config['N_params'] = model_test.param_ratio()
+                with open(os.path.join('conf.json'), 'w') as file:
+                    file.write(json.dumps(config, indent=4))
+                model_test = model_test.to(device)
+                model_test.apply(weight_init)
+                criterion = FocalLoss(config['gamma'])
+                new_state_dict = torch.load(os.path.join(config['res_dir'], 'Fold_{}'.format(fold + 1), 'model.pth.tar'))
+                model_dict = {k: v for k, v in model_test.state_dict().items() if
                               k != 'temporal_encoder.position_enc.weight'}
                 model_dict_copy = {k: v for k, v in model.state_dict().items()}
                 compatible_dict = {k: v for k, v in new_state_dict['state_dict'].items() if k in model_dict}
                 model_dict_copy.update(compatible_dict)
 
-                model.load_state_dict(model_dict_copy)
+                model_test.load_state_dict(model_dict_copy)
 
-                model.eval()
+                model_test.eval()
 
-                test_metrics, conf_mat = evaluation(model, criterion, i, device=device, mode='test', config=config)
+                test_metrics, conf_mat = evaluation(model_test, criterion, i, device=device, mode='test', config=config)
 
                 print('Loss {:.4f},  Acc {:.2f},  IoU {:.4f}'.format(test_metrics['test_loss'], test_metrics['test_accuracy'],
                                                                      test_metrics['test_IoU']))
             save_results(fold + 1, test_metrics, conf_mat, config)
             # 1 fold (no cross validation)
-            # break
+            break
 
 
     elif config['test_mode']:
@@ -506,7 +512,7 @@ if __name__ == '__main__':
     # Set-up parameters
     parser.add_argument('--dataset_folder', default='', type=str,
                         help='Path to the folder where the results are saved.')
-    parser.add_argument('--year', default=['2019', '2020'], type=str,
+    parser.add_argument('--year', default=['2018', '2019', '2020'], type=str,
                         help='The year of the data you want to use')
     parser.add_argument('--res_dir', default='./results', help='Path to the folder where the results should be stored')
     parser.add_argument('--num_workers', default=8, type=int, help='Number of data loading workers')
@@ -525,7 +531,7 @@ if __name__ == '__main__':
                         help='Path to the pre-trained model')
     # Training parameters
     parser.add_argument('--kfold', default=5, type=int, help='Number of folds for cross validation')
-    parser.add_argument('--epochs', default=1, type=int, help='Number of epochs per fold')
+    parser.add_argument('--epochs', default=100, type=int, help='Number of epochs per fold')
     parser.add_argument('--batch_size', default=128, type=int, help='Batch size')
     parser.add_argument('--lr', default=0.001, type=float, help='Learning rate')
     parser.add_argument('--gamma', default=1, type=float, help='Gamma parameter of the focal loss')
@@ -547,8 +553,10 @@ if __name__ == '__main__':
     parser.add_argument('--T', default=1000, type=int, help='Maximum period for the positional encoding')
     parser.add_argument('--positions', default='bespoke', type=str,
                         help='Positions to use for the positional encoding (bespoke / order)')
-    parser.add_argument('--lms', default=29, type=int,
+    parser.add_argument('--lms', default=36, type=int,
                         help='Maximum sequence length for positional encoding (only necessary if positions == order)')
+    parser.add_argument('--sly', default={'2018': 36, '2019': 27, '2020': 29},
+                        help='Sequence length by year for positional encoding (only necessary if positions == order)')
     parser.add_argument('--dropout', default=0.2, type=float, help='Dropout probability')
     parser.add_argument('--d_model', default=256, type=int,
                         help="size of the embeddings (E), if input vectors are of a different size, a linear layer is used to project them to a d_model-dimensional space"

@@ -1,6 +1,7 @@
 {
     "dataset_folder": "/home/FQuinton/Bureau/data_pse",
     "year": [
+        "2018",
         "2019",
         "2020"
     ],
@@ -13,7 +14,7 @@
     "test_mode": false,
     "loaded_model": "/home/FQuinton/Bureau/results/2019_geomfeat_1_20_class_affine/Fold_1/model.pth.tar",
     "kfold": 5,
-    "epochs": 1,
+    "epochs": 100,
     "batch_size": 128,
     "lr": 0.001,
     "gamma": 1,
@@ -38,7 +39,12 @@
     ],
     "T": 1000,
     "positions": "bespoke",
-    "lms": 29,
+    "lms": 36,
+    "sly": {
+        "2018": 36,
+        "2019": 27,
+        "2020": 29
+    },
     "dropout": 0.2,
     "d_model": 256,
     "num_classes": 20,

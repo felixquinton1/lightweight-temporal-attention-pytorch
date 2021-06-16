@@ -130,7 +130,11 @@ class linlayer(nn.Module):
 def masked_mean(x, mask):
     out = x.permute((1, 0, 2))
     out = out * mask
-    out = out.sum(dim=-1) / mask.sum(dim=-1)
+    try:
+        out = out.sum(dim=-1) / mask.sum(dim=-1)
+    except ValueError:
+        print("should not happen")
+    assert((out==out).all())
     out = out.permute((1, 0))
     return out
 

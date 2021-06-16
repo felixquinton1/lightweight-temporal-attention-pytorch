@@ -101,7 +101,7 @@ class PixelSetData(data.Dataset):
                 Extra-features : Sequence_length x Number of additional features
 
         """
-        x0 = np.load(os.path.join(self.folder, 'DATA', self.pid[item][-4:], '{}.npy'.format(self.pid[item][:-5]))).astype('uint16')
+        x0 = np.load(os.path.join(self.folder, 'DATA', self.pid[item][-4:], '{}.npy'.format(self.pid[item][:-5])))
         y = self.target[item]
 
         if x0.shape[-1] > self.npixel:
