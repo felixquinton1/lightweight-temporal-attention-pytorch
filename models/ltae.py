@@ -88,6 +88,7 @@ class LTAE(nn.Module):
         if self.inconv is not None:
             x = self.inconv(x.permute(0, 2, 1)).permute(0, 2, 1)
 
+
         if self.positions is None:
             src_pos = torch.arange(1, seq_len + 1, dtype=torch.long).expand(sz_b, seq_len).to(x.device)
         else:

@@ -16,7 +16,9 @@ from learning.focal_loss import FocalLoss
 from learning.weight_init import weight_init
 from learning.metrics import mIou, confusion_matrix_analysis
 
-
+import re
+import collections.abc
+from torch.nn import functional as F
 def train_epoch(model, optimizer, criterion, data_loader, device, config):
     acc_meter = tnt.meter.ClassErrorMeter(accuracy=True)
     loss_meter = tnt.meter.AverageValueMeter()
@@ -24,7 +26,6 @@ def train_epoch(model, optimizer, criterion, data_loader, device, config):
     y_pred = []
 
     for i, (x, y) in enumerate(data_loader):
-
         y_true.extend(list(map(int, y)))
 
         x = recursive_todevice(x, device)
@@ -83,6 +84,57 @@ def evaluation(model, criterion, loader, device, config, mode='val'):
         return metrics
     elif mode == 'test':
         return metrics, confusion_matrix(y_true, y_pred, labels=list(range(config['num_classes'])))
+
+np_str_obj_array_pattern = re.compile(r'[SaUO]')
+
+def pad_tensor(x, l, pad_value=1):
+    padlen = l - x.shape[0]
+    pad = [0 for _ in range(2 * len(x.shape[1:]))] + [0, padlen]
+    return F.pad(x, pad=pad, value=pad_value)
+
+def pad_collate(batch):
+    # modified default_collate from the official pytorch repo
+    # https://github.com/pytorch/pytorch/blob/master/torch/utils/data/_utils/collate.py
+    elem = batch[0]
+    elem_type = type(elem)
+    if isinstance(elem, torch.Tensor):
+        out = None
+        if len(elem.shape) > 0:
+            sizes = [e.shape[0] for e in batch]
+            m = max(sizes)
+            if not all(s == m for s in sizes):
+                # pad tensors which have a temporal dimension
+                batch = [pad_tensor(e, m) for e in batch]
+        if torch.utils.data.get_worker_info() is not None:
+            # If we're in a background process, concatenate directly into a
+            # shared memory tensor to avoid an extra copy
+            numel = sum([x.numel() for x in batch])
+            storage = elem.storage()._new_shared(numel)
+            out = elem.new(storage)
+        return torch.stack(batch, 0, out=out)
+    elif elem_type.__module__ == 'numpy' and elem_type.__name__ != 'str_' \
+            and elem_type.__name__ != 'string_':
+        if elem_type.__name__ == 'ndarray' or elem_type.__name__ == 'memmap':
+            # array of string classes and object
+            if np_str_obj_array_pattern.search(elem.dtype.str) is not None:
+                raise TypeError('Format not managed : {}'.format(elem.dtype))
+            return pad_collate([torch.as_tensor(b) for b in batch])
+        elif elem.shape == ():  # scalars
+            return torch.as_tensor(batch)
+    elif isinstance(elem, collections.abc.Mapping):
+        return {key: pad_collate([d[key] for d in batch]) for key in elem}
+    elif isinstance(elem, tuple) and hasattr(elem, '_fields'):  # namedtuple
+        return elem_type(*(pad_collate(samples) for samples in zip(*batch)))
+    elif isinstance(elem, collections.abc.Sequence):
+        # check to make sure that the elements in batch have consistent size
+        it = iter(batch)
+        elem_size = len(next(it))
+        if not all(len(elem) == elem_size for elem in it):
+            raise RuntimeError('each element in list of batch should be of equal size')
+        transposed = zip(*batch)
+        return [pad_collate(samples) for samples in transposed]
+
+    raise TypeError('Format not managed : {}'.format(elem_type))
 
 def get_test_loaders(dt, config):
     test_loader = data.DataLoader(dt, batch_size=config['batch_size'],
@@ -152,7 +204,7 @@ def get_multi_years_loaders(dt, kfold, config):
 
             test_loader[id_fold].append(data.DataLoader(merged_dt, batch_size=config['batch_size'],
                                           sampler=test_sampler,
-                                          num_workers=config['num_workers'], drop_last=True))
+                                          num_workers=config['num_workers'], drop_last=True, collate_fn=pad_collate))
             validation_indices[id_fold] += trainval[-ntest:]
             train_indices[id_fold] += trainval[:-ntest]
     for i in range(kfold):
@@ -161,10 +213,10 @@ def get_multi_years_loaders(dt, kfold, config):
 
         train_loader = data.DataLoader(merged_dt, batch_size=config['batch_size'],
                                        sampler=train_sampler,
-                                       num_workers=config['num_workers'], drop_last=True)
+                                       num_workers=config['num_workers'], drop_last=True, collate_fn=pad_collate)
         validation_loader = data.DataLoader(merged_dt, batch_size=config['batch_size'],
                                             sampler=validation_sampler,
-                                            num_workers=config['num_workers'], drop_last=True)
+                                            num_workers=config['num_workers'], drop_last=True, collate_fn=pad_collate)
 
         loader_seq.append((train_loader, validation_loader, test_loader[i]))
     return loader_seq, merged_dt
@@ -233,7 +285,7 @@ def main(config):
                               extra_feature=extra, year=year))
     device = torch.device(config['device'])
 
-    if len(config['year']) > 1:
+    if len(config['year']) > 0:
 
         loaders, dt = get_multi_years_loaders(dt, config['kfold'], config)
         for fold, (train_loader, val_loader, test_loader) in enumerate(loaders):
@@ -284,11 +336,22 @@ def main(config):
                                os.path.join(config['res_dir'], 'Fold_{}'.format(fold + 1), 'model.pth.tar'))
 
             print('Testing best epoch . . .')
-            model.load_state_dict(
-                torch.load(os.path.join(config['res_dir'], 'Fold_{}'.format(fold + 1), 'model.pth.tar'))['state_dict'])
-            model.eval()
+
             for year, i in enumerate(test_loader):
                 print("Année: {} ".format(config['year'][year]))
+
+                new_state_dict = torch.load(os.path.join(config['res_dir'], 'Fold_{}'.format(fold + 1), 'model.pth.tar'))[
+                        'state_dict']
+                model_dict = {k: v for k, v in model.state_dict().items() if
+                              k != 'temporal_encoder.position_enc.weight'}
+                model_dict_copy = {k: v for k, v in model.state_dict().items()}
+                compatible_dict = {k: v for k, v in new_state_dict['state_dict'].items() if k in model_dict}
+                model_dict_copy.update(compatible_dict)
+
+                model.load_state_dict(model_dict_copy)
+
+                model.eval()
+
                 test_metrics, conf_mat = evaluation(model, criterion, i, device=device, mode='test', config=config)
 
                 print('Loss {:.4f},  Acc {:.2f},  IoU {:.4f}'.format(test_metrics['test_loss'], test_metrics['test_accuracy'],
@@ -296,10 +359,9 @@ def main(config):
             save_results(fold + 1, test_metrics, conf_mat, config)
             # 1 fold (no cross validation)
             # break
-        overall_performance(config)
 
 
-    if config['test_mode']:
+    elif config['test_mode']:
         loader = get_test_loaders(dt, config)
         model_config = dict(input_dim=config['input_dim'], mlp1=config['mlp1'], pooling=config['pooling'],
                             mlp2=config['mlp2'], n_head=config['n_head'], d_k=config['d_k'], mlp3=config['mlp3'],
@@ -444,7 +506,7 @@ if __name__ == '__main__':
     # Set-up parameters
     parser.add_argument('--dataset_folder', default='', type=str,
                         help='Path to the folder where the results are saved.')
-    parser.add_argument('--year', default=['2018', '2019'], type=str,
+    parser.add_argument('--year', default=['2019', '2020'], type=str,
                         help='The year of the data you want to use')
     parser.add_argument('--res_dir', default='./results', help='Path to the folder where the results should be stored')
     parser.add_argument('--num_workers', default=8, type=int, help='Number of data loading workers')
@@ -485,7 +547,7 @@ if __name__ == '__main__':
     parser.add_argument('--T', default=1000, type=int, help='Maximum period for the positional encoding')
     parser.add_argument('--positions', default='bespoke', type=str,
                         help='Positions to use for the positional encoding (bespoke / order)')
-    parser.add_argument('--lms', default=36, type=int,
+    parser.add_argument('--lms', default=29, type=int,
                         help='Maximum sequence length for positional encoding (only necessary if positions == order)')
     parser.add_argument('--dropout', default=0.2, type=float, help='Dropout probability')
     parser.add_argument('--d_model', default=256, type=int,

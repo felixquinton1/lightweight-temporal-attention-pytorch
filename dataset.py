@@ -91,7 +91,7 @@ class PixelSetData(data.Dataset):
     def __getitem__(self, item):
         """
         Returns a Pixel-Set sequence tensor with its pixel mask and optional additional features.
-        For each item npixel pixels are randomly dranw from the available pixels.
+        For each item npixel pixels are randomly drawn from the available pixels.
         If the total number of pixel is too small one arbitrary pixel is repeated. The pixel mask keeps track of true
         and repeated pixels.
         Returns:
@@ -101,7 +101,7 @@ class PixelSetData(data.Dataset):
                 Extra-features : Sequence_length x Number of additional features
 
         """
-        x0 = np.load(os.path.join(self.folder, 'DATA', self.year, '{}.npy'.format(self.pid[item][:-5]))).astype('uint16')
+        x0 = np.load(os.path.join(self.folder, 'DATA', self.pid[item][-4:], '{}.npy'.format(self.pid[item][:-5]))).astype('uint16')
         y = self.target[item]
 
         if x0.shape[-1] > self.npixel:
