@@ -18,13 +18,18 @@ class PseLTae(nn.Module):
     def __init__(self, input_dim=10, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[128, 128], with_extra=True,
                  extra_size=4,
                  n_head=16, d_k=8, d_model=256, mlp3=[256, 128], dropout=0.2, T=1000, len_max_seq=24, positions=None,
-                 mlp4=[128, 64, 32, 20], return_att=False):
+                 mlp4=[128, 64, 32, 20], return_att=False, pse_pos_enc_dim=None,
+                 pse_pos_enc_mode='cat'):
         super(PseLTae, self).__init__()
+
+        self.pos_enc_in_pse = pse_pos_enc_dim is not None
         self.spatial_encoder = PixelSetEncoder(input_dim, mlp1=mlp1, pooling=pooling, mlp2=mlp2, with_extra=with_extra,
-                                               extra_size=extra_size)
+                                               extra_size=extra_size, pos_enc_dim=pse_pos_enc_dim,
+                                               pos_enc_mode=pse_pos_enc_mode,)
         self.temporal_encoder = LTAE(in_channels=mlp2[-1], n_head=n_head, d_k=d_k,
                                            d_model=d_model, n_neurons=mlp3, dropout=dropout,
-                                           T=T, len_max_seq=len_max_seq, positions=positions, return_att=return_att
+                                           T=T, len_max_seq=len_max_seq, positions=positions, return_att=return_att,
+                                           positional_encoding=not self.pos_enc_in_pse
                                            )
         self.decoder = get_decoder(mlp4)
         self.return_att = return_att
@@ -37,9 +42,12 @@ class PseLTae(nn.Module):
             Pixel-Mask : Batch_size x Sequence length x Number of pixels
             Extra-features : Batch_size x Sequence length x Number of features
         """
+
+        batch_positions = input['dates-{}'.format(self.key)]
+
         pad_mask = (input[0][0] == 0).all(dim=-1).all(dim=-1)  # BxT pad mask
-        out = self.spatial_encoder(input, pad_mask=pad_mask)
-        out = self.temporal_encoder(out, pad_mask=pad_mask)
+        out = self.spatial_encoder(input, pad_mask=pad_mask, batch_positions=batch_positions)
+        out = self.temporal_encoder(out, pad_mask=pad_mask, batch_positions=batch_positions)
         if self.return_att:
             # out, att = self.temporal_encoder(out)
             out, att = out
