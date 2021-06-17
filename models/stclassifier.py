@@ -37,13 +37,16 @@ class PseLTae(nn.Module):
             Pixel-Mask : Batch_size x Sequence length x Number of pixels
             Extra-features : Batch_size x Sequence length x Number of features
         """
-        out = self.spatial_encoder(input)
+        pad_mask = (input[0][0] == 0).all(dim=-1).all(dim=-1)  # BxT pad mask
+        out = self.spatial_encoder(input, pad_mask=pad_mask)
+        out = self.temporal_encoder(out, pad_mask=pad_mask)
         if self.return_att:
-            out, att = self.temporal_encoder(out)
+            # out, att = self.temporal_encoder(out)
+            out, att = out
             out = self.decoder(out)
             return out, att
         else:
-            out = self.temporal_encoder(out)
+            # out = self.temporal_encoder(out)
             out = self.decoder(out)
             return out
 

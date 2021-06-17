@@ -79,7 +79,7 @@ class LTAE(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, x, pad_mask=None):
 
         sz_b, seq_len, d = x.shape
 
@@ -95,7 +95,7 @@ class LTAE(nn.Module):
             src_pos = torch.arange(0, seq_len, dtype=torch.long).expand(sz_b, seq_len).to(x.device)
         enc_output = x + self.position_enc(src_pos)
 
-        enc_output, attn = self.attention_heads(enc_output, enc_output, enc_output)
+        enc_output, attn = self.attention_heads(enc_output, enc_output, enc_output, pad_mask=pad_mask)
 
         enc_output = enc_output.permute(1, 0, 2).contiguous().view(sz_b, -1)  # Concatenate heads
 
@@ -124,7 +124,7 @@ class MultiHeadAttention(nn.Module):
 
         self.attention = ScaledDotProductAttention(temperature=np.power(d_k, 0.5))
 
-    def forward(self, q, k, v):
+    def forward(self, q, k, v, pad_mask=None):
         d_k, d_in, n_head = self.d_k, self.d_in, self.n_head
         sz_b, seq_len, _ = q.size()
 
@@ -133,8 +133,11 @@ class MultiHeadAttention(nn.Module):
         k = self.fc1_k(v).view(sz_b, seq_len, n_head, d_k)
         k = k.permute(2, 0, 1, 3).contiguous().view(-1, seq_len, d_k)  # (n*b) x lk x dk
 
+        if pad_mask is not None:
+            pad_mask = pad_mask.repeat((n_head, 1))  # replicate pad_mask for each head (nxb) x lk
+
         v = torch.stack(v.split(v.shape[-1] // n_head, dim=-1)).view(n_head * sz_b, seq_len, -1)
-        output, attn = self.attention(q, k, v)
+        output, attn = self.attention(q, k, v, pad_mask=pad_mask)
         attn = attn.view(n_head, sz_b, 1, seq_len)
         attn = attn.squeeze(dim=2)
 
@@ -153,9 +156,12 @@ class ScaledDotProductAttention(nn.Module):
         self.dropout = nn.Dropout(attn_dropout)
         self.softmax = nn.Softmax(dim=2)
 
-    def forward(self, q, k, v):
+    def forward(self, q, k, v, pad_mask=None):
         attn = torch.matmul(q.unsqueeze(1), k.transpose(1, 2))
         attn = attn / self.temperature
+
+        if pad_mask is not None:
+            attn = attn.masked_fill(pad_mask.unsqueeze(1), -1e3)
 
         attn = self.softmax(attn)
         attn = self.dropout(attn)

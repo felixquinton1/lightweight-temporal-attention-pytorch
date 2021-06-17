@@ -64,7 +64,7 @@ class PixelSetEncoder(nn.Module):
                 layers.append(nn.ReLU())
         self.mlp2 = nn.Sequential(*layers)
 
-    def forward(self, input):
+    def forward(self, input, pad_mask=None):
         """
         The input of the PSE is a tuple of tensors as yielded by the PixelSetData class:
           (Pixel-Set, Pixel-Mask) or ((Pixel-Set, Pixel-Mask), Extra-features)
@@ -94,18 +94,34 @@ class PixelSetEncoder(nn.Module):
             mask = mask.view(batch * temp, -1)
             if self.with_extra:
                 extra = extra.view(batch * temp, -1)
+            if pad_mask is not None:
+                pad_mask = pad_mask.view(batch * temp)
         else:
             reshape_needed = False
 
-        out = self.mlp1(out)
+        if pad_mask is None:
+            out = self.mlp1(out)
+        else:
+            t = torch.ones((out.shape[0], self.mlp1_dim[-1], out.shape[-1]), device=out.device) * 0
+            t[~pad_mask] = self.mlp1(out[~pad_mask])
+            out = t
         out = torch.cat([pooling_methods[n](out, mask) for n in self.pooling.split('_')], dim=1)
 
         if self.with_extra:
             out = torch.cat([out, extra], dim=1)
-        out = self.mlp2(out)
+
+        if pad_mask is None:
+            out = self.mlp2(out)
+
+        else:
+            t = torch.ones((out.shape[0], self.mlp2_dim[-1]), device=out.device) * 0
+            t[~pad_mask] = self.mlp2(out[~pad_mask])
+            out = t
 
         if reshape_needed:
             out = out.view(batch, temp, -1)
+            if pad_mask is not None:
+                pad_mask = pad_mask.view(batch, temp)
         return out
 
 class linlayer(nn.Module):
@@ -130,11 +146,11 @@ class linlayer(nn.Module):
 def masked_mean(x, mask):
     out = x.permute((1, 0, 2))
     out = out * mask
-    try:
-        out = out.sum(dim=-1) / mask.sum(dim=-1)
-    except ValueError:
-        print("should not happen")
-    assert((out==out).all())
+    # try:
+    out = out.sum(dim=-1) / mask.sum(dim=-1)
+    # except ValueError:
+    #     print("should not happen")
+    # assert((out==out).all())
     out = out.permute((1, 0))
     return out
 

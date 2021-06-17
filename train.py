@@ -531,7 +531,7 @@ if __name__ == '__main__':
                         help='Path to the pre-trained model')
     # Training parameters
     parser.add_argument('--kfold', default=5, type=int, help='Number of folds for cross validation')
-    parser.add_argument('--epochs', default=100, type=int, help='Number of epochs per fold')
+    parser.add_argument('--epochs', default=1, type=int, help='Number of epochs per fold')
     parser.add_argument('--batch_size', default=128, type=int, help='Batch size')
     parser.add_argument('--lr', default=0.001, type=float, help='Learning rate')
     parser.add_argument('--gamma', default=1, type=float, help='Gamma parameter of the focal loss')
