@@ -75,11 +75,15 @@ class PixelSetData(data.Dataset):
         with open(os.path.join(folder, 'META', 'dates.json'), 'r') as file:
             raw_dates = json.loads(file.read())
         # dates = {prepare_dates(year,key, date, self.reference_date) for key, date in dates[year].items()}
-        dates = {}
-        for key, date in raw_dates[year].items():
-            dates[key] = prepare_dates(year, date, self.reference_date)
+        # dates = {}
+        # for key, date in raw_dates[year].items():
+        #     dates[key] = prepare_dates(year, date, self.reference_date)
         # self.dates = [d[str(i)] for i in range(len(d))]
         # self.date_positions = date_positions(self.dates)
+        dates = {year: []}
+        for i, (key, date) in enumerate(raw_dates[year].items()):
+            dates[year].append(prepare_dates(year, date, self.reference_date))
+        self.date_positions = dates
 
         if self.extra_feature is not None:
             with open(os.path.join(self.meta_folder, '{}.json'.format(extra_feature)), 'r') as file:
@@ -160,11 +164,12 @@ class PixelSetData(data.Dataset):
 
             ef = torch.stack([ef for _ in range(data[0].shape[0])], dim=0)
             data = (data, ef)
-
+        dates = self.date_positions[self.pid[item][-4:]]
+        dates = torch.tensor(dates)
         if self.return_id:
-            return data, torch.from_numpy(np.array(y, dtype=int)), self.pid[item]
+            return data, dates, torch.from_numpy(np.array(y, dtype=int)), self.pid[item]
         else:
-            return data, torch.from_numpy(np.array(y, dtype=int))
+            return data, torch.from_numpy(np.array(y, dtype=int)), dates
 
 
 class PixelSetData_preloaded(PixelSetData):
@@ -200,8 +205,12 @@ def date_positions(dates):
         pos.append(interval_days(d, dates[0]))
     return pos
 
+# def prepare_dates(year, date, reference_date):
+#     # d = pd.DataFrame().from_dict(date_dict, orient='index')
+#     # d = d[0].apply(lambda x: (dt.datetime(int(str(x)[:4]), int(str(x)[4:6]), int(str(x)[6:])) - reference_date).days)
+#     d = (dt.datetime(int(year), int(str(date[:2])), int(str(date)[2:])) - reference_date).days
+#     return d
+
 def prepare_dates(year, date, reference_date):
-    # d = pd.DataFrame().from_dict(date_dict, orient='index')
-    # d = d[0].apply(lambda x: (dt.datetime(int(str(x)[:4]), int(str(x)[4:6]), int(str(x)[6:])) - reference_date).days)
     d = (dt.datetime(int(year), int(str(date[:2])), int(str(date)[2:])) - reference_date).days
     return d

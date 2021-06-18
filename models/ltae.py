@@ -14,6 +14,8 @@ import torch.nn as nn
 import numpy as np
 import copy
 
+from models.positional_encoding import PositionalEncoder
+
 
 class LTAE(nn.Module):
     def __init__(self, in_channels=128, n_head=16, d_k=8, n_neurons=[256,128], dropout=0.2, d_model=256,
@@ -93,7 +95,7 @@ class LTAE(nn.Module):
             x = self.inconv(x.permute(0, 2, 1)).permute(0, 2, 1)
 
         if self.positional_encoder is not None:
-            x = x + self.positional_encoder(batch_positions)
+            x = x + self.positional_encoder(batch_positions).to(x.device)
 
         # if self.positions is None:
         #     src_pos = torch.arange(1, seq_len + 1, dtype=torch.long).expand(sz_b, seq_len).to(x.device)

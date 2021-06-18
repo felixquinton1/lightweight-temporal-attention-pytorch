@@ -28,13 +28,13 @@ class PseLTae(nn.Module):
                                                pos_enc_mode=pse_pos_enc_mode,)
         self.temporal_encoder = LTAE(in_channels=mlp2[-1], n_head=n_head, d_k=d_k,
                                            d_model=d_model, n_neurons=mlp3, dropout=dropout,
-                                           T=T, len_max_seq=len_max_seq, positions=positions, return_att=return_att,
+                                           T=T, len_max_seq=len_max_seq, return_att=return_att,
                                            positional_encoding=not self.pos_enc_in_pse
                                            )
         self.decoder = get_decoder(mlp4)
         self.return_att = return_att
 
-    def forward(self, input):
+    def forward(self, input, batch_positions):
         """
          Args:
             input(tuple): (Pixel-Set, Pixel-Mask) or ((Pixel-Set, Pixel-Mask), Extra-features)
@@ -43,7 +43,7 @@ class PseLTae(nn.Module):
             Extra-features : Batch_size x Sequence length x Number of features
         """
 
-        batch_positions = input['dates-{}'.format(self.key)]
+        # batch_positions = input['dates-{}'.format(self.key)]
 
         pad_mask = (input[0][0] == 0).all(dim=-1).all(dim=-1)  # BxT pad mask
         out = self.spatial_encoder(input, pad_mask=pad_mask, batch_positions=batch_positions)
