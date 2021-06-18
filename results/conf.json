@@ -14,7 +14,7 @@
     "test_mode": false,
     "loaded_model": "/home/FQuinton/Bureau/results/2019_geomfeat_1_20_class_affine/Fold_1/model.pth.tar",
     "kfold": 5,
-    "epochs": 1,
+    "epochs": 100,
     "batch_size": 128,
     "lr": 0.001,
     "gamma": 1,

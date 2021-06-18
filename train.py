@@ -19,20 +19,21 @@ from learning.metrics import mIou, confusion_matrix_analysis
 import re
 import collections.abc
 from torch.nn import functional as F
+
 def train_epoch(model, optimizer, criterion, data_loader, device, config):
     acc_meter = tnt.meter.ClassErrorMeter(accuracy=True)
     loss_meter = tnt.meter.AverageValueMeter()
     y_true = []
     y_pred = []
 
-    for i, (x, y) in enumerate(data_loader):
+    for i, (x, y, dates) in enumerate(data_loader):
         y_true.extend(list(map(int, y)))
 
         x = recursive_todevice(x, device)
         y = y.to(device)
 
         optimizer.zero_grad()
-        out = model(x)
+        out = model(x, batch_positions=dates)
         loss = criterion(out, y.long())
         loss.backward()
         optimizer.step()
@@ -60,14 +61,14 @@ def evaluation(model, criterion, loader, device, config, mode='val'):
 
     acc_meter = tnt.meter.ClassErrorMeter(accuracy=True)
     loss_meter = tnt.meter.AverageValueMeter()
-    for (x, y) in loader:
+    for (x, y, dates) in loader:
     # for (x, y) in tqdm(loader):
         y_true.extend(list(map(int, y)))
         x = recursive_todevice(x, device)
         y = y.to(device)
 
         with torch.no_grad():
-            prediction = model(x)
+            prediction = model(x, dates)
             loss = criterion(prediction, y)
 
         acc_meter.add(prediction, y)
@@ -190,8 +191,9 @@ def get_multi_years_loaders(dt, kfold, config):
     train_indices = [[] for i in range(kfold)]
     merged_dt = dt[0]
     for i in range(1, len(dt)):
-        merged_dt.dates += dt[i].dates
-        merged_dt.date_positions += dt[i].date_positions
+        # merged_dt.dates += dt[i].dates
+        # merged_dt.date_positions += dt[i].date_positions
+        merged_dt.date_positions.update(dt[i].date_positions)
         merged_dt.pid += dt[i].pid
         merged_dt.target += dt[i].target
 
@@ -364,7 +366,7 @@ def main(config):
                                                                      test_metrics['test_IoU']))
             save_results(fold + 1, test_metrics, conf_mat, config)
             # 1 fold (no cross validation)
-            break
+            # break
 
 
     elif config['test_mode']:
@@ -531,7 +533,7 @@ if __name__ == '__main__':
                         help='Path to the pre-trained model')
     # Training parameters
     parser.add_argument('--kfold', default=5, type=int, help='Number of folds for cross validation')
-    parser.add_argument('--epochs', default=1, type=int, help='Number of epochs per fold')
+    parser.add_argument('--epochs', default=100, type=int, help='Number of epochs per fold')
     parser.add_argument('--batch_size', default=128, type=int, help='Batch size')
     parser.add_argument('--lr', default=0.001, type=float, help='Learning rate')
     parser.add_argument('--gamma', default=1, type=float, help='Gamma parameter of the focal loss')

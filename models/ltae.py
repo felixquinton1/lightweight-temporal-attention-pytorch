@@ -14,10 +14,12 @@ import torch.nn as nn
 import numpy as np
 import copy
 
+from models.positional_encoding import PositionalEncoder
+
 
 class LTAE(nn.Module):
     def __init__(self, in_channels=128, n_head=16, d_k=8, n_neurons=[256,128], dropout=0.2, d_model=256,
-                 T=1000, len_max_seq=24, positions=None, return_att=False):
+                 T=1000, len_max_seq=24, positional_encoding=True, return_att=False):
         """
         Sequence-to-embedding encoder.
         Args:
@@ -38,13 +40,13 @@ class LTAE(nn.Module):
 
         super(LTAE, self).__init__()
         self.in_channels = in_channels
-        self.positions = positions
+        # self.positions = positions
         self.n_neurons = copy.deepcopy(n_neurons)
         self.return_att = return_att
 
 
-        if positions is None:
-            positions = len_max_seq + 1
+        # if positions is None:
+        #     positions = len_max_seq + 1
 
         if d_model is not None:
             self.d_model = d_model
@@ -54,9 +56,13 @@ class LTAE(nn.Module):
             self.d_model = in_channels
             self.inconv = None
 
-        sin_tab = get_sinusoid_encoding_table(positions, self.d_model // n_head, T=T)
-        self.position_enc = nn.Embedding.from_pretrained(torch.cat([sin_tab for _ in range(n_head)], dim=1),
-                                                         freeze=True)
+        if positional_encoding:
+            self.positional_encoder = PositionalEncoder(self.d_model // n_head, T=T, repeat=n_head)
+        else:
+            self.positional_encoder = None
+
+        # sin_tab = get_sinusoid_encoding_table(positions, self.d_model // n_head, T=T)
+        # self.position_enc = nn.Embedding.from_pretrained(torch.cat([sin_tab for _ in range(n_head)], dim=1), freeze=True)
 
         self.inlayernorm = nn.LayerNorm(self.in_channels)
 
@@ -79,7 +85,7 @@ class LTAE(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, pad_mask=None):
+    def forward(self, x, batch_positions=None, pad_mask=None):
 
         sz_b, seq_len, d = x.shape
 
@@ -88,14 +94,16 @@ class LTAE(nn.Module):
         if self.inconv is not None:
             x = self.inconv(x.permute(0, 2, 1)).permute(0, 2, 1)
 
+        if self.positional_encoder is not None:
+            x = x + self.positional_encoder(batch_positions).to(x.device)
 
-        if self.positions is None:
-            src_pos = torch.arange(1, seq_len + 1, dtype=torch.long).expand(sz_b, seq_len).to(x.device)
-        else:
-            src_pos = torch.arange(0, seq_len, dtype=torch.long).expand(sz_b, seq_len).to(x.device)
-        enc_output = x + self.position_enc(src_pos)
+        # if self.positions is None:
+        #     src_pos = torch.arange(1, seq_len + 1, dtype=torch.long).expand(sz_b, seq_len).to(x.device)
+        # else:
+        #     src_pos = torch.arange(0, seq_len, dtype=torch.long).expand(sz_b, seq_len).to(x.device)
+        # enc_output = x + self.position_enc(src_pos)
 
-        enc_output, attn = self.attention_heads(enc_output, enc_output, enc_output, pad_mask=pad_mask)
+        enc_output, attn = self.attention_heads(x, x, x, pad_mask=pad_mask)
 
         enc_output = enc_output.permute(1, 0, 2).contiguous().view(sz_b, -1)  # Concatenate heads
 
