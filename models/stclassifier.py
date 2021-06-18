@@ -17,7 +17,7 @@ class PseLTae(nn.Module):
 
     def __init__(self, input_dim=10, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[128, 128], with_extra=True,
                  extra_size=4,
-                 n_head=16, d_k=8, d_model=256, mlp3=[256, 128], dropout=0.2, T=1000, len_max_seq=24, positions=None,
+                 n_head=16, d_k=8, d_model=256, mlp3=[256, 128], dropout=0.2, T=1000, len_max_seq=24,
                  mlp4=[128, 64, 32, 20], return_att=False, pse_pos_enc_dim=None,
                  pse_pos_enc_mode='cat'):
         super(PseLTae, self).__init__()
@@ -43,7 +43,6 @@ class PseLTae(nn.Module):
             Extra-features : Batch_size x Sequence length x Number of features
         """
 
-        # batch_positions = input['dates-{}'.format(self.key)]
 
         pad_mask = (input[0][0] == 0).all(dim=-1).all(dim=-1)  # BxT pad mask
         out = self.spatial_encoder(input, pad_mask=pad_mask, batch_positions=batch_positions)
