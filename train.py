@@ -197,8 +197,6 @@ def get_multi_years_loaders(dt, kfold, config):
     train_indices = [[] for i in range(kfold)]
     merged_dt = dt[0]
     for i in range(1, len(dt)):
-        # merged_dt.dates += dt[i].dates
-        # merged_dt.date_positions += dt[i].date_positions
         merged_dt.date_positions.update(dt[i].date_positions)
         merged_dt.pid += dt[i].pid
         merged_dt.target += dt[i].target
@@ -241,7 +239,10 @@ def recursive_todevice(x, device):
 def prepare_output(config):
     os.makedirs(config['res_dir'], exist_ok=True)
     for fold in range(1, config['kfold'] + 1):
-        os.makedirs(os.path.join(config['res_dir'], 'Fold_{}'.format(fold)), exist_ok=True)
+        for year in config['year']:
+            os.makedirs(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), year), exist_ok=True)
+    os.makedirs(os.path.join(config['res_dir'], 'test_mode'), exist_ok=True)
+    os.makedirs(os.path.join(config['res_dir'], 'overall'), exist_ok=True)
 
 
 def checkpoint(fold, log, config):
@@ -268,29 +269,29 @@ def save_test_mode_results(metrics, conf_mat, config, year):
 def overall_performance_by_year(config, year):
     cm = np.zeros((config['num_classes'], config['num_classes']))
     for fold in range(1, config['kfold'] + 1):
-        cm += pkl.load(open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), year, '_conf_mat.pkl'), 'rb'))
+        cm += pkl.load(open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), year, 'conf_mat.pkl'), 'rb'))
 
     _, perf = confusion_matrix_analysis(cm)
 
     print('Overall performance in:' + year)
     print('Acc: {},  IoU: {}'.format(perf['Accuracy'], perf['MACRO_IoU']))
 
-    pkl.dump(cm.astype(int), open(os.path.join(config['res_dir'], year + '_conf_mat.pkl'), 'wb'))
-    with open(os.path.join(config['res_dir'], year + '_overall.json'), 'w') as file:
+    pkl.dump(cm.astype(int), open(os.path.join(config['res_dir'], 'overall', year + '_conf_mat.pkl'), 'wb'))
+    with open(os.path.join(config['res_dir'], 'overall', year + '_overall.json'), 'w') as file:
         file.write(json.dumps(perf, indent=4))
 
 def overall_performance(config):
     cm = np.zeros((config['num_classes'], config['num_classes']))
     for year in config['year']:
-        cm += pkl.load(open(os.path.join(config['res_dir'], year + '_conf_mat.pkl'), 'rb'))
+        cm += pkl.load(open(os.path.join(config['res_dir'], 'overall', year + '_conf_mat.pkl'), 'rb'))
 
     _, perf = confusion_matrix_analysis(cm)
 
     print('Overall performance:')
     print('Acc: {},  IoU: {}'.format(perf['Accuracy'], perf['MACRO_IoU']))
 
-    pkl.dump(cm.astype(int), open(os.path.join(config['res_dir'], 'conf_mat.pkl'), 'wb'))
-    with open(os.path.join(config['res_dir'], 'overall.json'), 'w') as file:
+    pkl.dump(cm.astype(int), open(os.path.join(config['res_dir'],'overall', 'conf_mat.pkl'), 'wb'))
+    with open(os.path.join(config['res_dir'], 'overall', 'overall.json'), 'w') as file:
         file.write(json.dumps(perf, indent=4))
 
 def model_definition(config, dt, test=False, year=None):
@@ -571,7 +572,7 @@ if __name__ == '__main__':
     # Set-up parameters
     parser.add_argument('--dataset_folder', default='', type=str,
                         help='Path to the folder where the results are saved.')
-    parser.add_argument('--year', default=['2018', '2019'], type=str,
+    parser.add_argument('--year', default=['2018'], type=str,
                         help='The year of the data you want to use')
     parser.add_argument('--res_dir', default='./results', help='Path to the folder where the results should be stored')
     parser.add_argument('--num_workers', default=8, type=int, help='Number of data loading workers')
@@ -584,7 +585,7 @@ if __name__ == '__main__':
                         help='If specified, the whole dataset is loaded to RAM at initialization')
     parser.set_defaults(preload=False)
 
-    parser.add_argument('--test_mode', default=True, type=bool,
+    parser.add_argument('--test_mode', default=False, type=bool,
                         help='Load a pre-trained model and test on the whole data set')
     parser.add_argument('--loaded_model',
                         default='/home/FQuinton/Bureau/lightweight-temporal-attention-pytorch/results/Fold_1/model.pth.tar',
@@ -592,7 +593,7 @@ if __name__ == '__main__':
                         help='Path to the pre-trained model')
     # Training parameters
     parser.add_argument('--kfold', default=5, type=int, help='Number of folds for cross validation')
-    parser.add_argument('--epochs', default=1, type=int, help='Number of epochs per fold')
+    parser.add_argument('--epochs', default=100, type=int, help='Number of epochs per fold')
     parser.add_argument('--batch_size', default=128, type=int, help='Batch size')
     parser.add_argument('--lr', default=0.001, type=float, help='Learning rate')
     parser.add_argument('--gamma', default=1, type=float, help='Gamma parameter of the focal loss')

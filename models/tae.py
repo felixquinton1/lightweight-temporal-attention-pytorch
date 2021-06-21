@@ -14,10 +14,12 @@ import torch.nn as nn
 import numpy as np
 import copy
 
+from models.positional_encoding import PositionalEncoder
+
 
 class TemporalAttentionEncoder(nn.Module):
     def __init__(self, in_channels=128, n_head=4, d_k=32, d_model=None, n_neurons=[512, 128, 128], dropout=0.2,
-                 T=1000, len_max_seq=24, positions=None, return_att=False):
+                 T=1000, len_max_seq=24, positional_encoding=True, return_att=False):
         """
         Sequence-to-embedding encoder.
         Args:
@@ -37,20 +39,25 @@ class TemporalAttentionEncoder(nn.Module):
 
         super(TemporalAttentionEncoder, self).__init__()
         self.in_channels = in_channels
-        self.positions = positions
+        # self.positions = positions
         self.n_neurons = copy.deepcopy(n_neurons)
         self.return_att = return_att
         self.name = 'TAE_dk{}_{}Heads_{}_T{}_do{}'.format(d_k, n_head, '|'.join(list(map(str, self.n_neurons))), T,
                                                           dropout)
 
-        if positions is None:
-            positions = len_max_seq + 1
+        if positional_encoding:
+            self.positional_encoder = PositionalEncoder(self.d_model // n_head, T=T, repeat=n_head)
         else:
-            self.name += '_bespokePos'
+            self.positional_encoder = None
 
-        self.position_enc = nn.Embedding.from_pretrained(
-            get_sinusoid_encoding_table(positions, self.in_channels, T=T),
-            freeze=True)
+        # if positions is None:
+        #     positions = len_max_seq + 1
+        # else:
+        #     self.name += '_bespokePos'
+
+        # self.position_enc = nn.Embedding.from_pretrained(
+        #     get_sinusoid_encoding_table(positions, self.in_channels, T=T),
+        #     freeze=True)
 
         self.inlayernorm = nn.LayerNorm(self.in_channels)
 
@@ -80,22 +87,25 @@ class TemporalAttentionEncoder(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, x, batch_positions=None, pad_mask=None):
 
         sz_b, seq_len, d = x.shape
 
         x = self.inlayernorm(x)
 
-        if self.positions is None:
-            src_pos = torch.arange(1, seq_len + 1, dtype=torch.long).expand(sz_b, seq_len).to(x.device)
-        else:
-            src_pos = torch.arange(0, seq_len, dtype=torch.long).expand(sz_b, seq_len).to(x.device)
-        enc_output = x + self.position_enc(src_pos)
+        # if self.positions is None:
+        #     src_pos = torch.arange(1, seq_len + 1, dtype=torch.long).expand(sz_b, seq_len).to(x.device)
+        # else:
+        #     src_pos = torch.arange(0, seq_len, dtype=torch.long).expand(sz_b, seq_len).to(x.device)
+        # enc_output = x + self.position_enc(src_pos)
 
         if self.inconv is not None:
-            enc_output = self.inconv(enc_output.permute(0, 2, 1)).permute(0, 2, 1)
+            x = self.inconv(x.permute(0, 2, 1)).permute(0, 2, 1)
 
-        enc_output, attn = self.attention_heads(enc_output, enc_output, enc_output)
+        if self.positional_encoder is not None:
+            x = x + self.positional_encoder(batch_positions).to(x.device)
+
+        enc_output, attn = self.attention_heads(x, x, x, pad_mask=pad_mask)
 
         enc_output = enc_output.permute(1, 0, 2).contiguous().view(sz_b, -1)  # Concatenate heads
 
@@ -129,7 +139,7 @@ class MultiHeadAttention(nn.Module):
 
         self.attention = ScaledDotProductAttention(temperature=np.power(d_k, 0.5))
 
-    def forward(self, q, k, v):
+    def forward(self, q, k, v, pad_mask=None):
         d_k, d_in, n_head = self.d_k, self.d_in, self.n_head
         sz_b, seq_len, _ = q.size()
 
@@ -141,9 +151,12 @@ class MultiHeadAttention(nn.Module):
         k = self.fc1_k(k).view(sz_b, seq_len, n_head, d_k)
         k = k.permute(2, 0, 1, 3).contiguous().view(-1, seq_len, d_k)  # (n*b) x lk x dk
 
+        if pad_mask is not None:
+            pad_mask = pad_mask.repeat((n_head, 1))  # replicate pad_mask for each head (nxb) x lk
+
         v = v.repeat(n_head, 1, 1)  # (n*b) x lv x d_in
 
-        output, attn = self.attention(q, k, v)
+        output, attn = self.attention(q, k, v, pad_mask=pad_mask)
 
         output = output.view(n_head, sz_b, 1, d_in)
         output = output.squeeze(dim=2)
@@ -163,9 +176,12 @@ class ScaledDotProductAttention(nn.Module):
         self.dropout = nn.Dropout(attn_dropout)
         self.softmax = nn.Softmax(dim=2)
 
-    def forward(self, q, k, v):
+    def forward(self, q, k, v, pad_mask=None):
         attn = torch.matmul(q.unsqueeze(1), k.transpose(1, 2))
         attn = attn / self.temperature
+
+        if pad_mask is not None:
+            attn = attn.masked_fill(pad_mask.unsqueeze(1), -1e3)
 
         attn = self.softmax(attn)
         attn = self.dropout(attn)

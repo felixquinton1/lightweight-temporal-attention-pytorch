@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+
+from models.positional_encoding import PositionalEncoder
 from models.tae import get_sinusoid_encoding_table
 import copy
 
@@ -10,23 +12,33 @@ class GRU(nn.Module):
     """
     Gated Recurrent Unit
     """
-    def __init__(self, in_channels=128, hidden_dim=128,  positions=None):
+    def __init__(self, in_channels=128, hidden_dim=128,   positional_encoding=True):
         super(GRU, self).__init__()
         self.name = 'GRU_h{}'.format(hidden_dim)
         self.gru_cell = nn.GRU(input_size=in_channels, hidden_size=hidden_dim, batch_first=True)
 
-        if positions is not None:
-            self.position_enc = nn.Embedding.from_pretrained(
-                get_sinusoid_encoding_table(positions, in_channels, T=1000),
-                freeze=True)
-        else:
-            self.position_enc = None
+        # if positions is not None:
+        #     self.position_enc = nn.Embedding.from_pretrained(
+        #         get_sinusoid_encoding_table(positions, in_channels, T=1000),
+        #         freeze=True)
+        # else:
+        #     self.position_enc = None
 
-    def forward(self, input):
+        if positional_encoding:
+            #Potentielle erreur avec la division
+            self.positional_encoder = PositionalEncoder(self.d_model // in_channels, T=1000, repeat=in_channels)
+        else:
+            self.positional_encoder = None
+
+    def forward(self, input, batch_positions=None, pad_mask=None):
         sz_b, seq_len, _ = input.shape
-        if self.position_enc is not None:
-            src_pos = torch.arange(1, seq_len + 1, dtype=torch.long).expand(sz_b, seq_len).to(input.device)
-            enc_output = input + self.position_enc(src_pos)
+
+        if self.positional_encoder is not None:
+            enc_output = input + self.positional_encoder(batch_positions).to(input.device)
+
+        # if self.position_enc is not None:
+        #     src_pos = torch.arange(1, seq_len + 1, dtype=torch.long).expand(sz_b, seq_len).to(input.device)
+        #     enc_output = input + self.position_enc(src_pos)
         else:
             enc_output = input
 
@@ -39,7 +51,7 @@ class TempConv(nn.Module):
     """
     Temporal CNN
     """
-    def __init__(self, input_size, nker, seq_len, nfc, positions=None):
+    def __init__(self, input_size, nker, seq_len, nfc, positional_encoding=True):
         super(TempConv, self).__init__()
         self.input_size = input_size
         self.seq_len = seq_len
@@ -73,19 +85,32 @@ class TempConv(nn.Module):
             ])
         self.linear = nn.Sequential(*lin_layers)
 
-        if positions is not None:
-            self.position_enc = nn.Embedding.from_pretrained(
-                get_sinusoid_encoding_table(positions, input_size, T=1000),
-                freeze=True)
+
+        if positional_encoding:
+            #Potentielle erreur avec la division
+            self.positional_encoder = PositionalEncoder(self.d_model // input_size, T=1000, repeat=input_size)
         else:
-            self.position_enc = None
+            self.positional_encoder = None
+
+        # if positions is not None:
+        #     self.position_enc = nn.Embedding.from_pretrained(
+        #         get_sinusoid_encoding_table(positions, input_size, T=1000),
+        #         freeze=True)
+        # else:
+        #     self.position_enc = None
 
 
-    def forward(self, input):
+    def forward(self, input, batch_positions=None, pad_mask=None):
         sz_b, seq_len, _ = input.shape
-        if self.position_enc is not  None:
-            src_pos = torch.arange(1, seq_len + 1, dtype=torch.long).expand(sz_b, seq_len).to(input.device)
-            enc_output = input + self.position_enc(src_pos)
+        # if self.position_enc is not  None:
+        #     src_pos = torch.arange(1, seq_len + 1, dtype=torch.long).expand(sz_b, seq_len).to(input.device)
+        #     enc_output = input + self.position_enc(src_pos)
+        # else:
+        #     enc_output = input
+
+
+        if self.positional_encoder is not None:
+            enc_output = input + self.positional_encoder(batch_positions).to(input.device)
         else:
             enc_output = input
 

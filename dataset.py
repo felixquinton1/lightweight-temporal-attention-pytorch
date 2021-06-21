@@ -74,12 +74,6 @@ class PixelSetData(data.Dataset):
 
         with open(os.path.join(folder, 'META', 'dates.json'), 'r') as file:
             raw_dates = json.loads(file.read())
-        # dates = {prepare_dates(year,key, date, self.reference_date) for key, date in dates[year].items()}
-        # dates = {}
-        # for key, date in raw_dates[year].items():
-        #     dates[key] = prepare_dates(year, date, self.reference_date)
-        # self.dates = [d[str(i)] for i in range(len(d))]
-        # self.date_positions = date_positions(self.dates)
         dates = {year: []}
         for i, (key, date) in enumerate(raw_dates[year].items()):
             dates[year].append(prepare_dates(year, date, self.reference_date))

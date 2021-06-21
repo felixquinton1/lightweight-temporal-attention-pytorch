@@ -12,7 +12,7 @@ from models.positional_encoding import PositionalEncoder
 
 class PixelSetEncoder(nn.Module):
     def __init__(self, input_dim, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[128, 128], with_extra=True,
-                 extra_size=4, pos_enc_dim=None, pos_enc_mode='cat',):
+                 extra_size=4):
         """
         Pixel-set encoder.
         Args:
@@ -42,14 +42,14 @@ class PixelSetEncoder(nn.Module):
 
         inter_dim = self.mlp1_dim[-1] * len(pooling.split('_'))
 
-        if pos_enc_dim is not None:
-            assert pos_enc_mode in ['cat', 'add']
-            self.positional_encoder = PositionalEncoder(pos_enc_dim)
-            if pos_enc_mode == 'cat':
-                inter_dim += pos_enc_dim
-            self.pos_enc_mode = pos_enc_mode
-        else:
-            self.positional_encoder = None
+        # if pos_enc_dim is not None:
+        #     assert pos_enc_mode in ['cat', 'add']
+        #     self.positional_encoder = PositionalEncoder(pos_enc_dim)
+        #     if pos_enc_mode == 'cat':
+        #         inter_dim += pos_enc_dim
+        #     self.pos_enc_mode = pos_enc_mode
+        # else:
+        #     self.positional_encoder = None
 
         if self.with_extra:
             self.name += 'Extra'
@@ -85,8 +85,8 @@ class PixelSetEncoder(nn.Module):
         shape Batch_size x Sequence length x Embedding dimension
         """
         a, b = input
-        if self.positional_encoder is not None:
-            pos_enc = self.positional_encoder(batch_positions)  # BxTxDp
+        # if self.positional_encoder is not None:
+        #     pos_enc = self.positional_encoder(batch_positions)  # BxTxDp
         if len(a) == 2:
             out, mask = a
             extra = b
@@ -104,8 +104,8 @@ class PixelSetEncoder(nn.Module):
             mask = mask.view(batch * temp, -1)
             if self.with_extra:
                 extra = extra.view(batch * temp, -1)
-            if self.positional_encoder is not None:
-                pos_enc = pos_enc.view(batch * temp, -1)
+            # if self.positional_encoder is not None:
+            #     pos_enc = pos_enc.view(batch * temp, -1)
             if pad_mask is not None:
                 pad_mask = pad_mask.view(batch * temp)
         else:
@@ -118,9 +118,6 @@ class PixelSetEncoder(nn.Module):
             t[~pad_mask] = self.mlp1(out[~pad_mask])
             out = t
         out = torch.cat([pooling_methods[n](out, mask) for n in self.pooling.split('_')], dim=1)
-
-        if self.positional_encoder is not None:
-            out = torch.cat([out, pos_enc], dim=1) if self.pos_enc_mode == 'cat' else out + pos_enc
 
         if self.with_extra:
             out = torch.cat([out, extra], dim=1)
