@@ -1,7 +1,7 @@
 {
     "dataset_folder": "/home/FQuinton/Bureau/data_pse",
     "year": [
-        "2018"
+        "2020"
     ],
     "res_dir": "./results",
     "num_workers": 8,
@@ -37,7 +37,7 @@
     ],
     "T": 1000,
     "positions": "bespoke",
-    "lms": 36,
+    "lms": 29,
     "sly": {
         "2018": 36,
         "2019": 27,

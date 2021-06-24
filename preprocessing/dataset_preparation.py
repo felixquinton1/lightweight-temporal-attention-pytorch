@@ -169,8 +169,8 @@ def prepare_output(output_path):
 
 if __name__ == '__main__':
     rpg_file = '/mnt/71A36E2C77574D51/preprocess/geojson/lpis_stable_all_years_reprojected.json'
-    input_folder = '/mnt/71A36E2C77574D51/preprocess/tif_2020/'
-    out_path = '/home/FQuinton/Bureau/data_pse/'
+    input_folder = '/mnt/71A36E2C77574D51/preprocess/tif_2018/'
+    out_path = '/home/FQuinton/Bureau/data_pse2/'
 
     # rpg_file = 'C:/Users/felix/OneDrive/Bureau/test/out/lpis_stable_all_years_reprojected.json'
     # input_folder = 'C:/Users/felix/OneDrive/Bureau/test/out/preproj/'
