@@ -1,7 +1,7 @@
 {
     "dataset_folder": "/home/FQuinton/Bureau/data_pse",
     "year": [
-        "2020"
+        "2018"
     ],
     "res_dir": "./results",
     "num_workers": 8,
@@ -9,8 +9,8 @@
     "device": "cuda",
     "display_step": 50,
     "preload": false,
-    "test_mode": false,
-    "loaded_model": "/home/FQuinton/Bureau/lightweight-temporal-attention-pytorch/results/Fold_1/model.pth.tar",
+    "test_mode": true,
+    "loaded_model": "/home/FQuinton/Bureau/lightweight-temporal-attention-pytorch/models_saved/2019/Fold_3/model.pth.tar",
     "kfold": 5,
     "epochs": 100,
     "batch_size": 128,
@@ -37,7 +37,7 @@
     ],
     "T": 1000,
     "positions": "bespoke",
-    "lms": 29,
+    "lms": 36,
     "sly": {
         "2018": 36,
         "2019": 27,

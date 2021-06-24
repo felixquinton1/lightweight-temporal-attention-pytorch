@@ -372,7 +372,7 @@ def main(config):
     torch.manual_seed(config['rdm_seed'])
     prepare_output(config)
 
-    mean_std = pkl.load(open(config['dataset_folder'] + '/normvals_2020.pkl', 'rb'))
+    mean_std = pkl.load(open(config['dataset_folder'] + '/normvals_2019.pkl', 'rb'))
     extra = 'geomfeat' if config['geomfeat'] else None
 
     # We only consider the subset of classes with more than 100 samples in the S2-Agri dataset
@@ -572,7 +572,7 @@ if __name__ == '__main__':
     # Set-up parameters
     parser.add_argument('--dataset_folder', default='', type=str,
                         help='Path to the folder where the results are saved.')
-    parser.add_argument('--year', default=['2020'], type=str,
+    parser.add_argument('--year', default=['2018'], type=str,
                         help='The year of the data you want to use')
     parser.add_argument('--res_dir', default='./results', help='Path to the folder where the results should be stored')
     parser.add_argument('--num_workers', default=8, type=int, help='Number of data loading workers')
@@ -585,10 +585,10 @@ if __name__ == '__main__':
                         help='If specified, the whole dataset is loaded to RAM at initialization')
     parser.set_defaults(preload=False)
 
-    parser.add_argument('--test_mode', default=False, type=bool,
+    parser.add_argument('--test_mode', default=True, type=bool,
                         help='Load a pre-trained model and test on the whole data set')
     parser.add_argument('--loaded_model',
-                        default='/home/FQuinton/Bureau/lightweight-temporal-attention-pytorch/results/Fold_1/model.pth.tar',
+                        default='/home/FQuinton/Bureau/lightweight-temporal-attention-pytorch/models_saved/2019/Fold_3/model.pth.tar',
                         type=str,
                         help='Path to the pre-trained model')
     # Training parameters
@@ -615,7 +615,7 @@ if __name__ == '__main__':
     parser.add_argument('--T', default=1000, type=int, help='Maximum period for the positional encoding')
     parser.add_argument('--positions', default='bespoke', type=str,
                         help='Positions to use for the positional encoding (bespoke / order)')
-    parser.add_argument('--lms', default=29, type=int,
+    parser.add_argument('--lms', default=36, type=int,
                         help='Maximum sequence length for positional encoding (only necessary if positions == order)')
     parser.add_argument('--sly', default={'2018': 36, '2019': 27, '2020': 29},
                         help='Sequence length by year for positional encoding (only necessary if positions == order)')
