@@ -17,20 +17,16 @@ class PseLTae(nn.Module):
 
     def __init__(self, input_dim=10, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[128, 128], with_extra=True,
                  extra_size=4,
-                 n_head=16, d_k=8, d_model=256, mlp3=[256, 128], dropout=0.2, T=1000, len_max_seq=24, positions=None,
-                 mlp4=[128, 64, 32, 20], return_att=False, pse_pos_enc_dim=None,
-                 pse_pos_enc_mode='cat'):
+                 n_head=16, d_k=8, d_model=256, mlp3=[256, 128], dropout=0.2, T=1000, len_max_seq=24,
+                 mlp4=[128, 64, 32, 20], return_att=False):
         super(PseLTae, self).__init__()
 
-        self.pos_enc_in_pse = pse_pos_enc_dim is not None
         self.spatial_encoder = PixelSetEncoder(input_dim, mlp1=mlp1, pooling=pooling, mlp2=mlp2, with_extra=with_extra,
-                                               extra_size=extra_size, pos_enc_dim=pse_pos_enc_dim,
-                                               pos_enc_mode=pse_pos_enc_mode,)
+                                               extra_size=extra_size)
         self.temporal_encoder = LTAE(in_channels=mlp2[-1], n_head=n_head, d_k=d_k,
                                            d_model=d_model, n_neurons=mlp3, dropout=dropout,
                                            T=T, len_max_seq=len_max_seq, return_att=return_att,
-                                           positional_encoding=not self.pos_enc_in_pse
-                                           )
+                                           positional_encoding=True)
         self.decoder = get_decoder(mlp4)
         self.return_att = return_att
 
@@ -43,10 +39,9 @@ class PseLTae(nn.Module):
             Extra-features : Batch_size x Sequence length x Number of features
         """
 
-        # batch_positions = input['dates-{}'.format(self.key)]
 
         pad_mask = (input[0][0] == 0).all(dim=-1).all(dim=-1)  # BxT pad mask
-        out = self.spatial_encoder(input, pad_mask=pad_mask, batch_positions=batch_positions)
+        out = self.spatial_encoder(input, pad_mask=pad_mask)
         out = self.temporal_encoder(out, pad_mask=pad_mask, batch_positions=batch_positions)
         if self.return_att:
             # out, att = self.temporal_encoder(out)
@@ -147,7 +142,6 @@ class PseTae(nn.Module):
     def __init__(self, input_dim=10, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[132, 128], with_extra=True,
                  extra_size=4,
                  n_head=4, d_k=32, d_model=None, mlp3=[512, 128, 128], dropout=0.2, T=1000, len_max_seq=24,
-                 positions=None,
                  mlp4=[128, 64, 32, 20], return_att=False):
         super(PseTae, self).__init__()
         self.spatial_encoder = PixelSetEncoder(input_dim, mlp1=mlp1, pooling=pooling, mlp2=mlp2, with_extra=with_extra,
@@ -155,13 +149,13 @@ class PseTae(nn.Module):
         self.temporal_encoder = TemporalAttentionEncoder(in_channels=mlp2[-1], n_head=n_head, d_k=d_k,
                                                          d_model=d_model,
                                                          n_neurons=mlp3, dropout=dropout,
-                                                         T=T, len_max_seq=len_max_seq, positions=positions,
-                                                         return_att=return_att)
+                                                         T=T, len_max_seq=len_max_seq,return_att=return_att,
+                                                         positional_encoding=not self.pos_enc_in_pse)
         self.decoder = get_decoder(mlp4)
         self.name = '_'.join([self.spatial_encoder.name, self.temporal_encoder.name])
         self.return_att = return_att
 
-    def forward(self, input):
+    def forward(self, input, batch_positions):
         """
          Args:
             input(tuple): (Pixel-Set, Pixel-Mask) or ((Pixel-Set, Pixel-Mask), Extra-features)
@@ -169,13 +163,17 @@ class PseTae(nn.Module):
             Pixel-Mask : Batch_size x Sequence length x Number of pixels
             Extra-features : Batch_size x Sequence length x Number of features
         """
-        out = self.spatial_encoder(input)
+
+        pad_mask = (input[0][0] == 0).all(dim=-1).all(dim=-1)  # BxT pad mask
+        out = self.spatial_encoder(input, pad_mask=pad_mask)
+        out = self.temporal_encoder(out, pad_mask=pad_mask, batch_positions=batch_positions)
         if self.return_att:
-            out, att = self.temporal_encoder(out)
+            # out, att = self.temporal_encoder(out)
+            out, att = out
             out = self.decoder(out)
             return out, att
         else:
-            out = self.temporal_encoder(out)
+            # out = self.temporal_encoder(out)
             out = self.decoder(out)
             return out
 
@@ -199,15 +197,16 @@ class PseGru(nn.Module):
     """
 
     def __init__(self, input_dim=10, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[132, 128], with_extra=True,
-                 extra_size=4, hidden_dim=128, mlp4=[128, 64, 32, 20], positions=None):
+                 extra_size=4, hidden_dim=128, mlp4=[128, 64, 32, 20], pse_pos_enc_dim=None,
+                 pse_pos_enc_mode='cat'):
         super(PseGru, self).__init__()
         self.spatial_encoder = PixelSetEncoder(input_dim, mlp1=mlp1, pooling=pooling, mlp2=mlp2, with_extra=with_extra,
                                                extra_size=extra_size)
-        self.temporal_encoder = GRU(in_channels=mlp2[-1], hidden_dim=hidden_dim, positions=positions)
+        self.temporal_encoder = GRU(in_channels=mlp2[-1], hidden_dim=hidden_dim, positional_encoding=not self.pos_enc_in_pse)
         self.decoder = get_decoder(mlp4)
         self.name = '_'.join([self.spatial_encoder.name, self.temporal_encoder.name])
 
-    def forward(self, input):
+    def forward(self, input, batch_positions):
         """
          Args:
             input(tuple): (Pixel-Set, Pixel-Mask) or ((Pixel-Set, Pixel-Mask), Extra-features)
@@ -215,9 +214,13 @@ class PseGru(nn.Module):
             Pixel-Mask : Batch_size x Sequence length x Number of pixels
             Extra-features : Batch_size x Sequence length x Number of features
         """
-        out = self.spatial_encoder(input)
 
-        out = self.temporal_encoder(out)
+        pad_mask = (input[0][0] == 0).all(dim=-1).all(dim=-1)  # BxT pad mask
+        out = self.spatial_encoder(input, pad_mask=pad_mask)
+        out = self.temporal_encoder(out, pad_mask=pad_mask, batch_positions=batch_positions)
+        # out = self.spatial_encoder(input)
+        #
+        # out = self.temporal_encoder(out)
         out = self.decoder(out)
         return out
 
@@ -240,15 +243,16 @@ class PseTempCNN(nn.Module):
     """
 
     def __init__(self, input_dim=10, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[132, 128], with_extra=True,
-                 extra_size=4, nker=[32, 32, 128], mlp3=[128, 128], seq_len=24, mlp4=[128, 64, 32, 20], positions=None):
+                 extra_size=4, nker=[32, 32, 128], mlp3=[128, 128], seq_len=24, mlp4=[128, 64, 32, 20], pse_pos_enc_dim=None,
+                 pse_pos_enc_mode='cat'):
         super(PseTempCNN, self).__init__()
         self.spatial_encoder = PixelSetEncoder(input_dim, mlp1=mlp1, pooling=pooling, mlp2=mlp2, with_extra=with_extra,
                                                extra_size=extra_size)
-        self.temporal_encoder = TempConv(input_size=mlp2[-1], nker=nker, seq_len=seq_len, nfc=mlp3, positions=positions)
+        self.temporal_encoder = TempConv(input_size=mlp2[-1], nker=nker, seq_len=seq_len, nfc=mlp3, positional_encoding=not self.pos_enc_in_pse)
         self.decoder = get_decoder(mlp4)
         self.name = '_'.join([self.spatial_encoder.name, self.temporal_encoder.name])
 
-    def forward(self, input):
+    def forward(self, input, batch_positions):
         """
          Args:
             input(tuple): (Pixel-Set, Pixel-Mask) or ((Pixel-Set, Pixel-Mask), Extra-features)
@@ -256,9 +260,13 @@ class PseTempCNN(nn.Module):
             Pixel-Mask : Batch_size x Sequence length x Number of pixels
             Extra-features : Batch_size x Sequence length x Number of features
         """
-        out = self.spatial_encoder(input)
 
-        out = self.temporal_encoder(out)
+        pad_mask = (input[0][0] == 0).all(dim=-1).all(dim=-1)  # BxT pad mask
+        out = self.spatial_encoder(input, pad_mask=pad_mask)
+        out = self.temporal_encoder(out, pad_mask=pad_mask, batch_positions=batch_positions)
+        # out = self.spatial_encoder(input)
+        #
+        # out = self.temporal_encoder(out)
         out = self.decoder(out)
         return out
 
