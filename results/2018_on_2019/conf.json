@@ -9,7 +9,7 @@
     "device": "cuda",
     "display_step": 50,
     "preload": false,
-    "test_mode": true,
+    "test_mode": false,
     "loaded_model": "/home/FQuinton/Bureau/lightweight-temporal-attention-pytorch/models_saved/2019",
     "kfold": 5,
     "epochs": 100,
