@@ -11,8 +11,8 @@ import json
 
 
 class PixelSetData(data.Dataset):
-    def __init__(self, folder, labels, npixel, sub_classes=None, norm=None,
-                 extra_feature=None, jitter=(0.01, 0.05), return_id=False):
+    def __init__(self, folder, labels, npixel, year=None, sub_classes=None, norm=None,
+                 extra_feature=None, jitter=(0.01, 0.05), return_id=False, reference_date='09-01', n_dates=None):
         """
 
         Args:
@@ -29,7 +29,8 @@ class PixelSetData(data.Dataset):
         super(PixelSetData, self).__init__()
 
         self.folder = folder
-        self.data_folder = os.path.join(folder, 'DATA')
+        self.year = year
+        self.data_folder = os.path.join(folder, 'DATA', year)
         self.meta_folder = os.path.join(folder, 'META')
         self.labels = labels
         self.npixel = npixel
@@ -38,12 +39,15 @@ class PixelSetData(data.Dataset):
         self.extra_feature = extra_feature
         self.jitter = jitter  # (sigma , clip )
         self.return_id = return_id
+        self.reference_date = dt.datetime(*map(int, [year] + reference_date.split('-')))
+        self.n_dates = n_dates
 
         l = [f for f in os.listdir(self.data_folder) if f.endswith('.npy')]
-        self.pid = [int(f.split('.')[0]) for f in l]
+        self.pid = [str(f.split('.')[0]) + "_" + year for f in l]
         self.pid = list(np.sort(self.pid))
 
         self.pid = list(map(str, self.pid))
+
         self.len = len(self.pid)
 
         # Get Labels
@@ -56,21 +60,24 @@ class PixelSetData(data.Dataset):
             d = json.loads(file.read())
             self.target = []
             for i, p in enumerate(self.pid):
-                t = d[labels][p]
+                t = d[labels][p[:-5]]
                 self.target.append(t)
                 if sub_classes is not None:
                     if t in sub_classes:
                         sub_indices.append(i)
                         self.target[-1] = convert[self.target[-1]]
+
         if sub_classes is not None:
             self.pid = list(np.array(self.pid)[sub_indices])
             self.target = list(np.array(self.target)[sub_indices])
             self.len = len(sub_indices)
 
         with open(os.path.join(folder, 'META', 'dates.json'), 'r') as file:
-            d = json.loads(file.read())
-        self.dates = [d[str(i)] for i in range(len(d))]
-        self.date_positions = date_positions(self.dates)
+            raw_dates = json.loads(file.read())
+        dates = {year: []}
+        for i, (key, date) in enumerate(raw_dates[year].items()):
+            dates[year].append(prepare_dates(year, date, self.reference_date))
+        self.date_positions = dates
 
         if self.extra_feature is not None:
             with open(os.path.join(self.meta_folder, '{}.json'.format(extra_feature)), 'r') as file:
@@ -88,7 +95,7 @@ class PixelSetData(data.Dataset):
     def __getitem__(self, item):
         """
         Returns a Pixel-Set sequence tensor with its pixel mask and optional additional features.
-        For each item npixel pixels are randomly dranw from the available pixels.
+        For each item npixel pixels are randomly drawn from the available pixels.
         If the total number of pixel is too small one arbitrary pixel is repeated. The pixel mask keeps track of true
         and repeated pixels.
         Returns:
@@ -98,7 +105,7 @@ class PixelSetData(data.Dataset):
                 Extra-features : Sequence_length x Number of additional features
 
         """
-        x0 = np.load(os.path.join(self.folder, 'DATA', '{}.npy'.format(self.pid[item])))
+        x0 = np.load(os.path.join(self.folder, 'DATA', self.pid[item][-4:], '{}.npy'.format(self.pid[item][:-5])))
         y = self.target[item]
 
         if x0.shape[-1] > self.npixel:
@@ -146,16 +153,17 @@ class PixelSetData(data.Dataset):
         data = (Tensor(x), Tensor(mask))
 
         if self.extra_feature is not None:
-            ef = (self.extra[str(self.pid[item])] - self.extra_m) / self.extra_s
+            ef = (self.extra[str(self.pid[item][:-5])] - self.extra_m) / self.extra_s
             ef = torch.from_numpy(ef).float()
 
             ef = torch.stack([ef for _ in range(data[0].shape[0])], dim=0)
             data = (data, ef)
-
+        dates = self.date_positions[self.pid[item][-4:]]
+        dates = torch.tensor(dates)
         if self.return_id:
-            return data, torch.from_numpy(np.array(y, dtype=int)), self.pid[item]
+            return data, dates, torch.from_numpy(np.array(y, dtype=int)), self.pid[item]
         else:
-            return data, torch.from_numpy(np.array(y, dtype=int))
+            return data, torch.from_numpy(np.array(y, dtype=int)), dates
 
 
 class PixelSetData_preloaded(PixelSetData):
@@ -190,3 +198,13 @@ def date_positions(dates):
     for d in dates:
         pos.append(interval_days(d, dates[0]))
     return pos
+
+# def prepare_dates(year, date, reference_date):
+#     # d = pd.DataFrame().from_dict(date_dict, orient='index')
+#     # d = d[0].apply(lambda x: (dt.datetime(int(str(x)[:4]), int(str(x)[4:6]), int(str(x)[6:])) - reference_date).days)
+#     d = (dt.datetime(int(year), int(str(date[:2])), int(str(date)[2:])) - reference_date).days
+#     return d
+
+def prepare_dates(year, date, reference_date):
+    d = (dt.datetime(int(year), int(str(date[:2])), int(str(date)[2:])) - reference_date).days
+    return d

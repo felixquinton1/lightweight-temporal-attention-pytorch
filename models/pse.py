@@ -8,10 +8,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import copy
-
+from models.positional_encoding import PositionalEncoder
 
 class PixelSetEncoder(nn.Module):
-    def __init__(self, input_dim, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[64, 128], with_extra=True,
+    def __init__(self, input_dim, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[128, 128], with_extra=True,
                  extra_size=4):
         """
         Pixel-set encoder.
@@ -42,6 +42,14 @@ class PixelSetEncoder(nn.Module):
 
         inter_dim = self.mlp1_dim[-1] * len(pooling.split('_'))
 
+        # if pos_enc_dim is not None:
+        #     assert pos_enc_mode in ['cat', 'add']
+        #     self.positional_encoder = PositionalEncoder(pos_enc_dim)
+        #     if pos_enc_mode == 'cat':
+        #         inter_dim += pos_enc_dim
+        #     self.pos_enc_mode = pos_enc_mode
+        # else:
+        #     self.positional_encoder = None
 
         if self.with_extra:
             self.name += 'Extra'
@@ -64,7 +72,7 @@ class PixelSetEncoder(nn.Module):
                 layers.append(nn.ReLU())
         self.mlp2 = nn.Sequential(*layers)
 
-    def forward(self, input):
+    def forward(self, input, pad_mask=None):
         """
         The input of the PSE is a tuple of tensors as yielded by the PixelSetData class:
           (Pixel-Set, Pixel-Mask) or ((Pixel-Set, Pixel-Mask), Extra-features)
@@ -94,18 +102,34 @@ class PixelSetEncoder(nn.Module):
             mask = mask.view(batch * temp, -1)
             if self.with_extra:
                 extra = extra.view(batch * temp, -1)
+            if pad_mask is not None:
+                pad_mask = pad_mask.view(batch * temp)
         else:
             reshape_needed = False
 
-        out = self.mlp1(out)
+        if pad_mask is None:
+            out = self.mlp1(out)
+        else:
+            t = torch.ones((out.shape[0], self.mlp1_dim[-1], out.shape[-1]), device=out.device) * 0
+            t[~pad_mask] = self.mlp1(out[~pad_mask])
+            out = t
         out = torch.cat([pooling_methods[n](out, mask) for n in self.pooling.split('_')], dim=1)
 
         if self.with_extra:
             out = torch.cat([out, extra], dim=1)
-        out = self.mlp2(out)
+
+        if pad_mask is None:
+            out = self.mlp2(out)
+
+        else:
+            t = torch.ones((out.shape[0], self.mlp2_dim[-1]), device=out.device) * 0
+            t[~pad_mask] = self.mlp2(out[~pad_mask])
+            out = t
 
         if reshape_needed:
             out = out.view(batch, temp, -1)
+            if pad_mask is not None:
+                pad_mask = pad_mask.view(batch, temp)
         return out
 
 class linlayer(nn.Module):
@@ -130,6 +154,7 @@ class linlayer(nn.Module):
 def masked_mean(x, mask):
     out = x.permute((1, 0, 2))
     out = out * mask
+    # try:
     out = out.sum(dim=-1) / mask.sum(dim=-1)
     out = out.permute((1, 0))
     return out
