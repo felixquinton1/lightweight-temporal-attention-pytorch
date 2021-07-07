@@ -61,9 +61,6 @@ class LTAE(nn.Module):
         else:
             self.positional_encoder = None
 
-        # sin_tab = get_sinusoid_encoding_table(positions, self.d_model // n_head, T=T)
-        # self.position_enc = nn.Embedding.from_pretrained(torch.cat([sin_tab for _ in range(n_head)], dim=1), freeze=True)
-
         self.inlayernorm = nn.LayerNorm(self.in_channels)
 
         self.outlayernorm = nn.LayerNorm(n_neurons[-1])
@@ -96,12 +93,6 @@ class LTAE(nn.Module):
 
         if self.positional_encoder is not None:
             x = x + self.positional_encoder(batch_positions).to(x.device)
-
-        # if self.positions is None:
-        #     src_pos = torch.arange(1, seq_len + 1, dtype=torch.long).expand(sz_b, seq_len).to(x.device)
-        # else:
-        #     src_pos = torch.arange(0, seq_len, dtype=torch.long).expand(sz_b, seq_len).to(x.device)
-        # enc_output = x + self.position_enc(src_pos)
 
         enc_output, attn = self.attention_heads(x, x, x, pad_mask=pad_mask)
 

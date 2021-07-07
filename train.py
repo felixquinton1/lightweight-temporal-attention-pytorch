@@ -142,10 +142,20 @@ def pad_collate(batch):
     raise TypeError('Format not managed : {}'.format(elem_type))
 
 
-def get_test_loaders(dt, config):
-    test_loader = data.DataLoader(dt, batch_size=config['batch_size'],
-                                  num_workers=config['num_workers'], drop_last=True)
-    return test_loader
+def get_test_loaders(dt,kfold, config):
+    indices = list(range(len(dt)))
+    np.random.shuffle(indices)
+    loaders = []
+    kf = KFold(n_splits=kfold, shuffle=False)
+    indices_seq = list(kf.split(list(range(len(dt)))))
+    for trainval, test_indices in indices_seq:
+        test_indices = [indices[i] for i in test_indices]
+        test_sampler = data.sampler.SubsetRandomSampler(test_indices)
+        test_loader = data.DataLoader(dt, batch_size=config['batch_size'],
+                                      sampler=test_sampler,
+                                      num_workers=config['num_workers'], drop_last=True)
+        loaders.append(test_loader)
+    return loaders
 
 
 def get_loaders(dt, kfold, config):
@@ -183,9 +193,11 @@ def get_loaders(dt, kfold, config):
 
 
 def get_multi_years_loaders(dt, kfold, config):
-    indices = [list(range(i * len(dt[i]), (i + 1) * len(dt[i]))) for i in range(len(dt))]
-    for i in range(len(indices)):
-        np.random.shuffle(indices[i])
+    indices = [np.array(range(i * len(dt[i]), (i + 1) * len(dt[i]))) for i in range(len(dt))]
+    np.random.shuffle(indices[0])
+    if len(indices)>1:
+        for i in range(1, len(indices)):
+            indices[i] = np.array(indices[0]) + len(indices[0]) * i
 
     kf = KFold(n_splits=kfold, shuffle=False)
     indices_seq = [list(kf.split(list(range(len(i))))) for i in dt]
@@ -239,9 +251,10 @@ def recursive_todevice(x, device):
 def prepare_output(config):
     os.makedirs(config['res_dir'], exist_ok=True)
     for fold in range(1, config['kfold'] + 1):
-        for year in config['year']:
-            os.makedirs(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), year), exist_ok=True)
-    os.makedirs(os.path.join(config['res_dir'], 'test_mode'), exist_ok=True)
+        if not config['test_mode']:
+            for year in config['year']:
+                os.makedirs(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), year), exist_ok=True)
+        os.makedirs(os.path.join(config['res_dir'],'Fold_{}'.format(fold)), exist_ok=True)
     os.makedirs(os.path.join(config['res_dir'], 'overall'), exist_ok=True)
 
 
@@ -258,18 +271,21 @@ def save_results(fold, metrics, conf_mat, config, year):
                                          ), 'wb'))
 
 
-def save_test_mode_results(metrics, conf_mat, config, year):
-    with open(os.path.join(config['res_dir'], 'test_mode', year + 'test_metrics.json'), 'w') \
+def save_test_mode_results(metrics, conf_mat, config, year, fold):
+    with open(os.path.join(config['res_dir'],'Fold_{}'.format(fold), year + '_test_metrics.json'), 'w') \
             as outfile:
         json.dump(metrics, outfile, indent=4)
-    pkl.dump(conf_mat, open(os.path.join(config['res_dir'], 'test_mode', year + '_conf_mat.pkl'
+    pkl.dump(conf_mat, open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), year + '_conf_mat.pkl'
                                          ), 'wb'))
 
 
 def overall_performance_by_year(config, year):
     cm = np.zeros((config['num_classes'], config['num_classes']))
     for fold in range(1, config['kfold'] + 1):
-        cm += pkl.load(open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), year, 'conf_mat.pkl'), 'rb'))
+        if not config['test_mode']:
+            cm += pkl.load(open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), year, 'conf_mat.pkl'), 'rb'))
+        else:
+            cm += pkl.load(open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), year + '_conf_mat.pkl'), 'rb'))
 
     _, perf = confusion_matrix_analysis(cm)
 
@@ -345,7 +361,7 @@ def model_definition(config, dt, test=False, year=None):
         model = PseLTae(**model_config)
     return model, model_config
 
-def test_model(model, loader, config, device, path):
+def test_model(model, loader, config, device, path ,fold):
 
     config['N_params'] = model.param_ratio()
     with open(os.path.join('conf.json'), 'w') as file:
@@ -353,7 +369,7 @@ def test_model(model, loader, config, device, path):
     model = model.to(device)
     model.apply(weight_init)
     criterion = FocalLoss(config['gamma'])
-    new_state_dict = torch.load(path)
+    new_state_dict = torch.load(os.path.join(path,'Fold_{}'.format(fold),'model.pth.tar'))
     model_dict = {k: v for k, v in model.state_dict().items() if k != 'temporal_encoder.position_enc.weight'}
     model_dict_copy = {k: v for k, v in model.state_dict().items()}
     compatible_dict = {k: v for k, v in new_state_dict['state_dict'].items() if k in model_dict}
@@ -444,8 +460,8 @@ def main(config):
 
                 model_config['len_max_seq'] = config['sly'][config['year'][year]]
                 model_test, model_test_config = model_definition(config, dt, test=True, year=year)
-                path = os.path.join(config['res_dir'], 'Fold_{}'.format(fold + 1), 'model.pth.tar')
-                test_metrics, conf_mat, config = test_model(model_test, i, config, device, path)
+                path = config['res_dir']
+                test_metrics, conf_mat, config = test_model(model_test, i, config, device, path, fold+1)
                 save_results(fold + 1, test_metrics, conf_mat, config, year)
             # 1 fold (no cross validation)
             # break
@@ -455,113 +471,16 @@ def main(config):
 
     else:
         for year in range(len(dt)):
-            loader = get_test_loaders(dt[year], config)
-            model, model_config = model_definition(config, dt[year], True, year)
-            path = config['loaded_model']
-            test_metrics, conf_mat, config = test_model(model, loader, config, device, path)
-            save_test_mode_results(test_metrics, conf_mat, config, config['year'][year])
+            # loaders, dt = get_multi_years_loaders(dt, config['kfold'], config)
+            loaders = get_test_loaders(dt[year], config['kfold'], config)
+            for fold, loader in enumerate(loaders):
+                model, model_config = model_definition(config, dt[year], True, year)
+                path = config['loaded_model']
+                test_metrics, conf_mat, config = test_model(model, loader, config, device, path, fold+1)
+                save_test_mode_results(test_metrics, conf_mat, config, config['year'][year], fold+1)
+            overall_performance_by_year(config, config['year'][year])
 
-    # else:
-    #     dt = dt[0]
-    #     loaders = get_loaders(dt, config['kfold'], config)
-    #     for fold, (train_loader, val_loader, test_loader) in enumerate(loaders):
-    #         print('Starting Fold {}'.format(fold + 1))
-    #         print('Train {}, Val {}, Test {}'.format(len(train_loader), len(val_loader), len(test_loader)))
-    #
-    #         if config['tae']:
-    #             model_config = dict(input_dim=config['input_dim'], mlp1=config['mlp1'], pooling=config['pooling'],
-    #                                 mlp2=config['mlp2'], n_head=config['n_head'], d_k=config['d_k'], mlp3=config['mlp3'],
-    #                                 dropout=config['dropout'], T=config['T'], len_max_seq=config['lms'],
-    #                                 positions=dt.date_positions if config['positions'] == 'bespoke' else None,
-    #                                 mlp4=config['mlp4'], d_model=config['d_model'])
-    #             if config['geomfeat']:
-    #                 model_config.update(with_extra=True, extra_size=4)
-    #             else:
-    #                 model_config.update(with_extra=False, extra_size=None)
-    #             model = PseTae(**model_config)
-    #
-    #
-    #         elif config['gru']:
-    #             model_config = dict(input_dim=config['input_dim'], mlp1=config['mlp1'], pooling=config['pooling'],
-    #                                 mlp2=config['mlp2'], hidden_dim=config['hidden_dim'],
-    #                                 positions=dt.date_positions if config['positions'] == 'bespoke' else None,
-    #                                 mlp4=config['mlp4'])
-    #             if config['geomfeat']:
-    #                 model_config.update(with_extra=True, extra_size=4)
-    #             else:
-    #                 model_config.update(with_extra=False, extra_size=None)
-    #             model = PseGru(**model_config)
-    #
-    #         elif config['tcnn']:
-    #             model_config = dict(input_dim=config['input_dim'], mlp1=config['mlp1'], pooling=config['pooling'],
-    #                                 mlp2=config['mlp2'], nker=config['nker'], mlp3=config['mlp3'],
-    #                                 positions=dt.date_positions if config['positions'] == 'bespoke' else None,
-    #                                 mlp4=config['mlp4'])
-    #             if config['geomfeat']:
-    #                 model_config.update(with_extra=True, extra_size=4)
-    #             else:
-    #                 model_config.update(with_extra=False, extra_size=None)
-    #             model = PseTempCNN(**model_config)
-    #
-    #
-    #         else:
-    #             model_config = dict(input_dim=config['input_dim'], mlp1=config['mlp1'], pooling=config['pooling'],
-    #                                 mlp2=config['mlp2'], n_head=config['n_head'], d_k=config['d_k'], mlp3=config['mlp3'],
-    #                                 dropout=config['dropout'], T=config['T'], len_max_seq=config['lms'],
-    #                                 positions=dt.date_positions if config['positions'] == 'bespoke' else None,
-    #                                 mlp4=config['mlp4'], d_model=config['d_model'])
-    #             if config['geomfeat']:
-    #                 model_config.update(with_extra=True, extra_size=4)
-    #             else:
-    #                 model_config.update(with_extra=False, extra_size=None)
-    #             model = PseLTae(**model_config)
-    #
-    #         config['N_params'] = model.param_ratio()
-    #         with open(os.path.join(config['res_dir'], 'conf.json'), 'w') as file:
-    #             file.write(json.dumps(config, indent=4))
-    #
-    #         model = model.to(device)
-    #         model.apply(weight_init)
-    #         optimizer = torch.optim.Adam(model.parameters())
-    #         criterion = FocalLoss(config['gamma'])
-    #
-    #         trainlog = {}
-    #
-    #         best_mIoU = 0
-    #         for epoch in range(1, config['epochs'] + 1):
-    #             print('EPOCH {}/{}'.format(epoch, config['epochs']))
-    #
-    #             model.train()
-    #             train_metrics = train_epoch(model, optimizer, criterion, train_loader, device=device, config=config)
-    #
-    #             print('Validation . . . ')
-    #             model.eval()
-    #             val_metrics = evaluation(model, criterion, val_loader, device=device, config=config, mode='val')
-    #
-    #             print('Loss {:.4f},  Acc {:.2f},  IoU {:.4f}'.format(val_metrics['val_loss'], val_metrics['val_accuracy'],
-    #                                                                  val_metrics['val_IoU']))
-    #
-    #             trainlog[epoch] = {**train_metrics, **val_metrics}
-    #             checkpoint(fold + 1, trainlog, config)
-    #
-    #             if val_metrics['val_IoU'] >= best_mIoU:
-    #                 best_mIoU = val_metrics['val_IoU']
-    #                 torch.save({'epoch': epoch, 'state_dict': model.state_dict(),
-    #                             'optimizer': optimizer.state_dict()},
-    #                            os.path.join(config['res_dir'], 'Fold_{}'.format(fold + 1), 'model.pth.tar'))
-    #
-    #         print('Testing best epoch . . .')
-    #         model.load_state_dict(
-    #             torch.load(os.path.join(config['res_dir'], 'Fold_{}'.format(fold + 1), 'model.pth.tar'))['state_dict'])
-    #         model.eval()
-    #
-    #         test_metrics, conf_mat = evaluation(model, criterion, test_loader, device=device, mode='test', config=config)
-    #
-    #         print('Loss {:.4f},  Acc {:.2f},  IoU {:.4f}'.format(test_metrics['test_loss'], test_metrics['test_accuracy'],
-    #                                                              test_metrics['test_IoU']))
-    #         save_results(fold + 1, test_metrics, conf_mat, config)
-    #         # 1 fold (no cross validation)
-    #         break
+
 
 
 
@@ -574,7 +493,7 @@ if __name__ == '__main__':
                         help='Path to the folder where the results are saved.')
     parser.add_argument('--year', default=['2018'], type=str,
                         help='The year of the data you want to use')
-    parser.add_argument('--res_dir', default='./results', help='Path to the folder where the results should be stored')
+    parser.add_argument('--res_dir', default='./results/2018_on_2019', help='Path to the folder where the results should be stored')
     parser.add_argument('--num_workers', default=8, type=int, help='Number of data loading workers')
     parser.add_argument('--rdm_seed', default=1, type=int, help='Random seed')
     parser.add_argument('--device', default='cuda', type=str,
@@ -588,7 +507,7 @@ if __name__ == '__main__':
     parser.add_argument('--test_mode', default=True, type=bool,
                         help='Load a pre-trained model and test on the whole data set')
     parser.add_argument('--loaded_model',
-                        default='/home/FQuinton/Bureau/lightweight-temporal-attention-pytorch/models_saved/2019/Fold_3/model.pth.tar',
+                        default='/home/FQuinton/Bureau/lightweight-temporal-attention-pytorch/models_saved/2019',
                         type=str,
                         help='Path to the pre-trained model')
     # Training parameters

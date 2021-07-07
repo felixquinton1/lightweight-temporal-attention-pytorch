@@ -72,7 +72,7 @@ class PixelSetEncoder(nn.Module):
                 layers.append(nn.ReLU())
         self.mlp2 = nn.Sequential(*layers)
 
-    def forward(self, input, pad_mask=None, batch_positions=None):
+    def forward(self, input, pad_mask=None):
         """
         The input of the PSE is a tuple of tensors as yielded by the PixelSetData class:
           (Pixel-Set, Pixel-Mask) or ((Pixel-Set, Pixel-Mask), Extra-features)
@@ -85,8 +85,6 @@ class PixelSetEncoder(nn.Module):
         shape Batch_size x Sequence length x Embedding dimension
         """
         a, b = input
-        # if self.positional_encoder is not None:
-        #     pos_enc = self.positional_encoder(batch_positions)  # BxTxDp
         if len(a) == 2:
             out, mask = a
             extra = b
@@ -104,8 +102,6 @@ class PixelSetEncoder(nn.Module):
             mask = mask.view(batch * temp, -1)
             if self.with_extra:
                 extra = extra.view(batch * temp, -1)
-            # if self.positional_encoder is not None:
-            #     pos_enc = pos_enc.view(batch * temp, -1)
             if pad_mask is not None:
                 pad_mask = pad_mask.view(batch * temp)
         else:
@@ -160,9 +156,6 @@ def masked_mean(x, mask):
     out = out * mask
     # try:
     out = out.sum(dim=-1) / mask.sum(dim=-1)
-    # except ValueError:
-    #     print("should not happen")
-    # assert((out==out).all())
     out = out.permute((1, 0))
     return out
 
