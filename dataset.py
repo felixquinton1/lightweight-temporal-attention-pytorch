@@ -12,7 +12,7 @@ import json
 
 class PixelSetData(data.Dataset):
     def __init__(self, folder, labels, npixel, year=None, sub_classes=None, norm=None,
-                 extra_feature=None, jitter=(0.01, 0.05), return_id=False, reference_date='09-01', n_dates=None):
+                 extra_feature=None, extra_feature_temp=None, jitter=(0.01, 0.05), return_id=False, reference_date='09-01', n_dates=None):
         """
 
         Args:
@@ -37,6 +37,7 @@ class PixelSetData(data.Dataset):
         self.norm = norm
 
         self.extra_feature = extra_feature
+        self.extra_feature_temp = extra_feature_temp
         self.jitter = jitter  # (sigma , clip )
         self.return_id = return_id
         self.reference_date = dt.datetime(*map(int, [year] + reference_date.split('-')))
@@ -158,13 +159,25 @@ class PixelSetData(data.Dataset):
 
             ef = torch.stack([ef for _ in range(data[0].shape[0])], dim=0)
             data = (data, ef)
+        temp_feat=None
+        if self.extra_feature_temp is not None:
+            temp_feat = np.zeros(20, dtype=int)
+            if self.pid[item][-4:] == '2018':
+                temp_feat[self.target[item + 103602]] += 1
+                temp_feat[self.target[item + 207204]] += 1
+            if self.pid[item][-4:] == '2019':
+                temp_feat[self.target[item - 103602]] += 1
+                temp_feat[self.target[item + 103602]] += 1
+            elif self.pid[item][-4:] == '2020':
+                temp_feat[self.target[item - 103602]] += 1
+                temp_feat[self.target[item - 207204]] += 1
         dates = self.date_positions[self.pid[item][-4:]]
         dates = torch.tensor(dates)
         if self.return_id:
-            return data, dates, torch.from_numpy(np.array(y, dtype=int)), self.pid[item]
+            return data, torch.from_numpy(np.array(y, dtype=int)), dates, temp_feat, self.pid[item]
         else:
-            return data, torch.from_numpy(np.array(y, dtype=int)), dates
-
+            return data, torch.from_numpy(np.array(y, dtype=int)), dates, temp_feat
+            # return data, torch.from_numpy(np.array(y, dtype=int)), dates
 
 class PixelSetData_preloaded(PixelSetData):
     """ Wrapper class to load all the dataset to RAM at initialization (when the hardware permits it).

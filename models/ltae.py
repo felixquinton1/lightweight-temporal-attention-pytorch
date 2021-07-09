@@ -40,13 +40,9 @@ class LTAE(nn.Module):
 
         super(LTAE, self).__init__()
         self.in_channels = in_channels
-        # self.positions = positions
         self.n_neurons = copy.deepcopy(n_neurons)
         self.return_att = return_att
 
-
-        # if positions is None:
-        #     positions = len_max_seq + 1
 
         if d_model is not None:
             self.d_model = d_model

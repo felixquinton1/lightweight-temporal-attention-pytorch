@@ -27,14 +27,16 @@ def train_epoch(model, optimizer, criterion, data_loader, device, config):
     y_true = []
     y_pred = []
 
-    for i, (x, y, dates) in enumerate(data_loader):
+    for i, (x, y, dates, temp_feat) in enumerate(data_loader):
+    # for i, (x, y, dates) in enumerate(data_loader):
         y_true.extend(list(map(int, y)))
 
         x = recursive_todevice(x, device)
         y = y.to(device)
 
         optimizer.zero_grad()
-        out = model(x, batch_positions=dates)
+        out = model(x, batch_positions=dates, temp_feat=temp_feat)
+        # out = model(x, batch_positions=dates)
         loss = criterion(out, y.long())
         loss.backward()
         optimizer.step()
@@ -63,13 +65,15 @@ def evaluation(model, criterion, loader, device, config, mode='val'):
     acc_meter = tnt.meter.ClassErrorMeter(accuracy=True)
     loss_meter = tnt.meter.AverageValueMeter()
     # for (x, y, dates) in loader:
-    for (x, y, dates) in tqdm(loader):
+    # for (x, y, dates) in tqdm(loader):
+    for (x, y, dates, temp_feat) in tqdm(loader):
         y_true.extend(list(map(int, y)))
         x = recursive_todevice(x, device)
         y = y.to(device)
 
         with torch.no_grad():
-            prediction = model(x, dates)
+            prediction = model(x, dates, temp_feat)
+            # prediction = model(x, dates)
             loss = criterion(prediction, y)
 
         acc_meter.add(prediction, y)
@@ -358,6 +362,12 @@ def model_definition(config, dt, test=False, year=None):
             model_config.update(with_extra=True, extra_size=4)
         else:
             model_config.update(with_extra=False, extra_size=None)
+
+        if config['tempfeat']:
+            model_config.update(with_temp_feat=True)
+        else:
+            model_config.update(with_temp_feat=False)
+
         model = PseLTae(**model_config)
     return model, model_config
 
@@ -388,9 +398,9 @@ def main(config):
     torch.manual_seed(config['rdm_seed'])
     prepare_output(config)
 
-    mean_std = pkl.load(open(config['dataset_folder'] + '/normvals_2019.pkl', 'rb'))
+    mean_std = pkl.load(open(config['dataset_folder'] + '/normvals_tot.pkl', 'rb'))
     extra = 'geomfeat' if config['geomfeat'] else None
-
+    extra_temp = 'tempfeat' if config['tempfeat'] else None
     # We only consider the subset of classes with more than 100 samples in the S2-Agri dataset
     # subset = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
     subset = None
@@ -407,7 +417,7 @@ def main(config):
             dt.append(PixelSetData(config['dataset_folder'], labels='CODE9_' + year, npixel=config['npixel'],
                                    sub_classes=subset,
                                    norm=mean_std,
-                                   extra_feature=extra, year=year))
+                                   extra_feature=extra, extra_feature_temp=extra_temp, year=year))
 
     device = torch.device(config['device'])
 
@@ -491,9 +501,9 @@ if __name__ == '__main__':
     # Set-up parameters
     parser.add_argument('--dataset_folder', default='', type=str,
                         help='Path to the folder where the results are saved.')
-    parser.add_argument('--year', default=['2018'], type=str,
+    parser.add_argument('--year', default=['2018','2019','2020'], type=str,
                         help='The year of the data you want to use')
-    parser.add_argument('--res_dir', default='./results/2018_on_2019', help='Path to the folder where the results should be stored')
+    parser.add_argument('--res_dir', default='./results/tempfeat_18_19_20', help='Path to the folder where the results should be stored')
     parser.add_argument('--num_workers', default=8, type=int, help='Number of data loading workers')
     parser.add_argument('--rdm_seed', default=1, type=int, help='Random seed')
     parser.add_argument('--device', default='cuda', type=str,
@@ -504,7 +514,7 @@ if __name__ == '__main__':
                         help='If specified, the whole dataset is loaded to RAM at initialization')
     parser.set_defaults(preload=False)
 
-    parser.add_argument('--test_mode', default=True, type=bool,
+    parser.add_argument('--test_mode', default=False, type=bool,
                         help='Load a pre-trained model and test on the whole data set')
     parser.add_argument('--loaded_model',
                         default='/home/FQuinton/Bureau/lightweight-temporal-attention-pytorch/models_saved/2019',
@@ -543,9 +553,12 @@ if __name__ == '__main__':
                         help="size of the embeddings (E), if input vectors are of a different size, a linear layer is used to project them to a d_model-dimensional space"
                         )
 
+    parser.add_argument('--tempfeat', default=1, type=int,
+                        help='If 1 the past years labels are used before classification PSE.')
+
     ## Classifier
     parser.add_argument('--num_classes', default=20, type=int, help='Number of classes')
-    parser.add_argument('--mlp4', default='[128, 64, 32, 20]', type=str, help='Number of neurons in the layers of MLP4')
+    parser.add_argument('--mlp4', default='[148, 64, 32, 20]', type=str, help='Number of neurons in the layers of MLP4')
 
     ## Other methods (use one of the flags tae/gru/tcnn to train respectively a TAE, GRU or TempCNN instead of an L-TAE)
     ## see paper appendix for hyperparameters
