@@ -12,7 +12,8 @@ import json
 
 class PixelSetData(data.Dataset):
     def __init__(self, folder, labels, npixel, year=None, sub_classes=None, norm=None,
-                 extra_feature=None, extra_feature_temp=None, jitter=(0.01, 0.05), return_id=False, reference_date='09-01', n_dates=None):
+                 extra_feature=None, extra_feature_temp=None, jitter=(0.01, 0.05), return_id=False,
+                 reference_date='09-01', n_dates=None, num_classes=20, years_list=[]):
         """
 
         Args:
@@ -42,6 +43,8 @@ class PixelSetData(data.Dataset):
         self.return_id = return_id
         self.reference_date = dt.datetime(*map(int, [year] + reference_date.split('-')))
         self.n_dates = n_dates
+        self.num_classes = num_classes
+        self.years_list = years_list
 
         l = [f for f in os.listdir(self.data_folder) if f.endswith('.npy')]
         self.pid = [str(f.split('.')[0]) + "_" + year for f in l]
@@ -151,33 +154,28 @@ class PixelSetData(data.Dataset):
             x = x + np.clip(sigma * np.random.randn(*x.shape), -1 * clip, clip)
 
         mask = np.stack([mask for _ in range(x.shape[0])], axis=0)  # Add temporal dimension to mask
-        data = (Tensor(x), Tensor(mask))
+        data = {'input': (Tensor(x), Tensor(mask)) }
 
         if self.extra_feature is not None:
             ef = (self.extra[str(self.pid[item][:-5])] - self.extra_m) / self.extra_s
             ef = torch.from_numpy(ef).float()
 
             ef = torch.stack([ef for _ in range(data[0].shape[0])], dim=0)
-            data = (data, ef)
-        temp_feat=None
+            data['input'] = (data['input'], ef)
         if self.extra_feature_temp is not None:
-            temp_feat = np.zeros(20, dtype=int)
-            if self.pid[item][-4:] == '2018':
-                temp_feat[self.target[item + 103602]] += 1
-                temp_feat[self.target[item + 207204]] += 1
-            if self.pid[item][-4:] == '2019':
-                temp_feat[self.target[item - 103602]] += 1
-                temp_feat[self.target[item + 103602]] += 1
-            elif self.pid[item][-4:] == '2020':
-                temp_feat[self.target[item - 103602]] += 1
-                temp_feat[self.target[item - 207204]] += 1
+            temp_feat = np.zeros(self.num_classes, dtype=int)
+            for i in self.years_list:
+                if i != self.year:
+                    shift = int(self.year) - int(i)
+                    temp_feat[self.target[item + self.len * shift]] += 1
+
+            data['temp_feat'] = temp_feat
         dates = self.date_positions[self.pid[item][-4:]]
-        dates = torch.tensor(dates)
+        data['dates'] = torch.tensor(dates)
         if self.return_id:
-            return data, torch.from_numpy(np.array(y, dtype=int)), dates, temp_feat, self.pid[item]
+            return data, torch.from_numpy(np.array(y, dtype=int)), self.pid[item]
         else:
-            return data, torch.from_numpy(np.array(y, dtype=int)), dates, temp_feat
-            # return data, torch.from_numpy(np.array(y, dtype=int)), dates
+            return data, torch.from_numpy(np.array(y, dtype=int))
 
 class PixelSetData_preloaded(PixelSetData):
     """ Wrapper class to load all the dataset to RAM at initialization (when the hardware permits it).
@@ -212,11 +210,6 @@ def date_positions(dates):
         pos.append(interval_days(d, dates[0]))
     return pos
 
-# def prepare_dates(year, date, reference_date):
-#     # d = pd.DataFrame().from_dict(date_dict, orient='index')
-#     # d = d[0].apply(lambda x: (dt.datetime(int(str(x)[:4]), int(str(x)[4:6]), int(str(x)[6:])) - reference_date).days)
-#     d = (dt.datetime(int(year), int(str(date[:2])), int(str(date)[2:])) - reference_date).days
-#     return d
 
 def prepare_dates(year, date, reference_date):
     d = (dt.datetime(int(year), int(str(date[:2])), int(str(date)[2:])) - reference_date).days
