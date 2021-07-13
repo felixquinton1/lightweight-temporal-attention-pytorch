@@ -27,16 +27,14 @@ def train_epoch(model, optimizer, criterion, data_loader, device, config):
     y_true = []
     y_pred = []
 
-    for i, (x, y, dates, temp_feat) in enumerate(data_loader):
-    # for i, (x, y, dates) in enumerate(data_loader):
+    for i, (data, y) in enumerate(data_loader):
         y_true.extend(list(map(int, y)))
 
-        x = recursive_todevice(x, device)
+        x = recursive_todevice(data, device)
         y = y.to(device)
 
         optimizer.zero_grad()
-        out = model(x, batch_positions=dates, temp_feat=temp_feat)
-        # out = model(x, batch_positions=dates)
+        out = model(x)
         loss = criterion(out, y.long())
         loss.backward()
         optimizer.step()
@@ -64,16 +62,14 @@ def evaluation(model, criterion, loader, device, config, mode='val'):
 
     acc_meter = tnt.meter.ClassErrorMeter(accuracy=True)
     loss_meter = tnt.meter.AverageValueMeter()
-    # for (x, y, dates) in loader:
-    # for (x, y, dates) in tqdm(loader):
-    for (x, y, dates, temp_feat) in tqdm(loader):
+
+    for (data, y) in tqdm(loader):
         y_true.extend(list(map(int, y)))
-        x = recursive_todevice(x, device)
+        x = recursive_todevice(data['input'], device)
         y = y.to(device)
 
         with torch.no_grad():
-            prediction = model(x, dates, temp_feat)
-            # prediction = model(x, dates)
+            prediction = model(x)
             loss = criterion(prediction, y)
 
         acc_meter.add(prediction, y)
@@ -325,48 +321,53 @@ def model_definition(config, dt, test=False, year=None):
                             mlp2=config['mlp2'], n_head=config['n_head'], d_k=config['d_k'], mlp3=config['mlp3'],
                             dropout=config['dropout'], T=config['T'], len_max_seq=lms,
                             positions=dt.date_positions if config['positions'] == 'bespoke' else None,
-                            mlp4=config['mlp4'], d_model=config['d_model'])
+                            mlp4=config['mlp4'], d_model=config['d_model'], with_extra=False, extra_size=None,
+                            with_temp_feat=False)
         if config['geomfeat']:
             model_config.update(with_extra=True, extra_size=4)
-        else:
-            model_config.update(with_extra=False, extra_size=None)
+
+        if config['tempfeat']:
+            model_config.update(with_temp_feat=True, num_classes=config['num_classes'])
+
         model = PseTae(**model_config)
 
     elif config['gru']:
         model_config = dict(input_dim=config['input_dim'], mlp1=config['mlp1'], pooling=config['pooling'],
                             mlp2=config['mlp2'], hidden_dim=config['hidden_dim'],
                             positions=dt.date_positions if config['positions'] == 'bespoke' else None,
-                            mlp4=config['mlp4'])
+                            mlp4=config['mlp4'], with_extra=False, extra_size=None,
+                            with_temp_feat=False)
         if config['geomfeat']:
             model_config.update(with_extra=True, extra_size=4)
-        else:
-            model_config.update(with_extra=False, extra_size=None)
+
+        if config['tempfeat']:
+            model_config.update(with_temp_feat=True, num_classes=config['num_classes'])
         model = PseGru(**model_config)
 
     elif config['tcnn']:
         model_config = dict(input_dim=config['input_dim'], mlp1=config['mlp1'], pooling=config['pooling'],
                             mlp2=config['mlp2'], nker=config['nker'], mlp3=config['mlp3'],
                             positions=dt.date_positions if config['positions'] == 'bespoke' else None,
-                            mlp4=config['mlp4'])
+                            mlp4=config['mlp4'], with_extra=False, extra_size=None,
+                            with_temp_feat=False)
         if config['geomfeat']:
             model_config.update(with_extra=True, extra_size=4)
-        else:
-            model_config.update(with_extra=False, extra_size=None)
+
+        if config['tempfeat']:
+            model_config.update(with_temp_feat=True, num_classes=config['num_classes'])
+
         model = PseTempCNN(**model_config)
     else:
         model_config = dict(input_dim=config['input_dim'], mlp1=config['mlp1'], pooling=config['pooling'],
                             mlp2=config['mlp2'], n_head=config['n_head'], d_k=config['d_k'], mlp3=config['mlp3'],
                             dropout=config['dropout'], T=config['T'], len_max_seq=lms,
-                            mlp4=config['mlp4'], d_model=config['d_model'])
+                            mlp4=config['mlp4'], d_model=config['d_model'], with_extra=False, extra_size=None,
+                            with_temp_feat=False)
         if config['geomfeat']:
             model_config.update(with_extra=True, extra_size=4)
-        else:
-            model_config.update(with_extra=False, extra_size=None)
 
         if config['tempfeat']:
-            model_config.update(with_temp_feat=True)
-        else:
-            model_config.update(with_temp_feat=False)
+            model_config.update(with_temp_feat=True, num_classes=config['num_classes'])
 
         model = PseLTae(**model_config)
     return model, model_config
@@ -417,7 +418,8 @@ def main(config):
             dt.append(PixelSetData(config['dataset_folder'], labels='CODE9_' + year, npixel=config['npixel'],
                                    sub_classes=subset,
                                    norm=mean_std,
-                                   extra_feature=extra, extra_feature_temp=extra_temp, year=year))
+                                   extra_feature=extra, extra_feature_temp=extra_temp, year=year,
+                                   years_list=config['year'], num_classes=config['num_classes']))
 
     device = torch.device(config['device'])
 

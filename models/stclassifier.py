@@ -18,7 +18,7 @@ class PseLTae(nn.Module):
     def __init__(self, input_dim=10, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[128, 128], with_extra=True,
                  extra_size=4,
                  n_head=16, d_k=8, d_model=256, mlp3=[256, 128], dropout=0.2, T=1000, len_max_seq=24,
-                 mlp4=[148, 64, 32, 20], return_att=False, with_temp_feat=True):
+                 mlp4=[128, 64, 32, 20], return_att=False, with_temp_feat=True, num_classes=20):
         super(PseLTae, self).__init__()
 
         self.spatial_encoder = PixelSetEncoder(input_dim, mlp1=mlp1, pooling=pooling, mlp2=mlp2, with_extra=with_extra,
@@ -28,10 +28,12 @@ class PseLTae(nn.Module):
                                            T=T, len_max_seq=len_max_seq, return_att=return_att,
                                            positional_encoding=True)
         self.with_temp_feat = with_temp_feat
+        if with_temp_feat:
+            mlp4[0] = mlp4 + num_classes
         self.decoder = get_decoder(mlp4)
         self.return_att = return_att
 
-    def forward(self, input, batch_positions, temp_feat=None):
+    def forward(self, input):
         """
          Args:
             input(tuple): (Pixel-Set, Pixel-Mask) or ((Pixel-Set, Pixel-Mask), Extra-features)
@@ -40,14 +42,13 @@ class PseLTae(nn.Module):
             Extra-features : Batch_size x Sequence length x Number of features
         """
 
-
+        batch_positions = input['dates']
         pad_mask = (input[0][0] == 0).all(dim=-1).all(dim=-1)  # BxT pad mask
-        out = self.spatial_encoder(input, pad_mask=pad_mask)
+        out = self.spatial_encoder(input['input'], pad_mask=pad_mask)
         out = self.temporal_encoder(out, pad_mask=pad_mask, batch_positions=batch_positions)
 
         if self.with_temp_feat:
-            # temp_feat.to(out.device)
-            out = torch.cat([out, temp_feat.to(out.device)], dim=1)
+            out = torch.cat([out, input['temp_feat'].to(out.device)], dim=1)
 
         if self.return_att:
             out, att = out
@@ -144,9 +145,8 @@ class PseTae(nn.Module):
     """
 
     def __init__(self, input_dim=10, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[132, 128], with_extra=True,
-                 extra_size=4,
-                 n_head=4, d_k=32, d_model=None, mlp3=[512, 128, 128], dropout=0.2, T=1000, len_max_seq=24,
-                 mlp4=[128, 64, 32, 20], return_att=False):
+                 extra_size=4, n_head=4, d_k=32, d_model=None, mlp3=[512, 128, 128], dropout=0.2, T=1000,
+                 len_max_seq=24, mlp4=[128, 64, 32, 20], return_att=False, with_temp_feat=True, num_classes=20):
         super(PseTae, self).__init__()
         self.spatial_encoder = PixelSetEncoder(input_dim, mlp1=mlp1, pooling=pooling, mlp2=mlp2, with_extra=with_extra,
                                                extra_size=extra_size)
@@ -155,11 +155,15 @@ class PseTae(nn.Module):
                                                          n_neurons=mlp3, dropout=dropout,
                                                          T=T, len_max_seq=len_max_seq,return_att=return_att,
                                                          positional_encoding=not self.pos_enc_in_pse)
+
+        self.with_temp_feat = with_temp_feat
+        if with_temp_feat:
+            mlp4[0] = mlp4 + num_classes
         self.decoder = get_decoder(mlp4)
         self.name = '_'.join([self.spatial_encoder.name, self.temporal_encoder.name])
         self.return_att = return_att
 
-    def forward(self, input, batch_positions):
+    def forward(self, input):
         """
          Args:
             input(tuple): (Pixel-Set, Pixel-Mask) or ((Pixel-Set, Pixel-Mask), Extra-features)
@@ -168,11 +172,15 @@ class PseTae(nn.Module):
             Extra-features : Batch_size x Sequence length x Number of features
         """
 
+        batch_positions = input['dates']
         pad_mask = (input[0][0] == 0).all(dim=-1).all(dim=-1)  # BxT pad mask
-        out = self.spatial_encoder(input, pad_mask=pad_mask)
+        out = self.spatial_encoder(input['input'], pad_mask=pad_mask)
         out = self.temporal_encoder(out, pad_mask=pad_mask, batch_positions=batch_positions)
+
+        if self.with_temp_feat:
+            out = torch.cat([out, input['temp_feat'].to(out.device)], dim=1)
+
         if self.return_att:
-            # out, att = self.temporal_encoder(out)
             out, att = out
             out = self.decoder(out)
             return out, att
@@ -202,15 +210,18 @@ class PseGru(nn.Module):
 
     def __init__(self, input_dim=10, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[132, 128], with_extra=True,
                  extra_size=4, hidden_dim=128, mlp4=[128, 64, 32, 20], pse_pos_enc_dim=None,
-                 pse_pos_enc_mode='cat'):
+                 pse_pos_enc_mode='cat', with_temp_feat=True, num_classes=20):
         super(PseGru, self).__init__()
         self.spatial_encoder = PixelSetEncoder(input_dim, mlp1=mlp1, pooling=pooling, mlp2=mlp2, with_extra=with_extra,
                                                extra_size=extra_size)
         self.temporal_encoder = GRU(in_channels=mlp2[-1], hidden_dim=hidden_dim, positional_encoding=not self.pos_enc_in_pse)
+        self.with_temp_feat = with_temp_feat
+        if with_temp_feat:
+            mlp4[0] = mlp4 + num_classes
         self.decoder = get_decoder(mlp4)
         self.name = '_'.join([self.spatial_encoder.name, self.temporal_encoder.name])
 
-    def forward(self, input, batch_positions):
+    def forward(self, input):
         """
          Args:
             input(tuple): (Pixel-Set, Pixel-Mask) or ((Pixel-Set, Pixel-Mask), Extra-features)
@@ -219,12 +230,14 @@ class PseGru(nn.Module):
             Extra-features : Batch_size x Sequence length x Number of features
         """
 
+        batch_positions = input['dates']
         pad_mask = (input[0][0] == 0).all(dim=-1).all(dim=-1)  # BxT pad mask
-        out = self.spatial_encoder(input, pad_mask=pad_mask)
+        out = self.spatial_encoder(input['input'], pad_mask=pad_mask)
         out = self.temporal_encoder(out, pad_mask=pad_mask, batch_positions=batch_positions)
-        # out = self.spatial_encoder(input)
-        #
-        # out = self.temporal_encoder(out)
+
+        if self.with_temp_feat:
+            out = torch.cat([out, input['temp_feat'].to(out.device)], dim=1)
+
         out = self.decoder(out)
         return out
 
@@ -248,15 +261,18 @@ class PseTempCNN(nn.Module):
 
     def __init__(self, input_dim=10, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[132, 128], with_extra=True,
                  extra_size=4, nker=[32, 32, 128], mlp3=[128, 128], seq_len=24, mlp4=[128, 64, 32, 20], pse_pos_enc_dim=None,
-                 pse_pos_enc_mode='cat'):
+                 pse_pos_enc_mode='cat', with_temp_feat=True, num_classes=20):
         super(PseTempCNN, self).__init__()
         self.spatial_encoder = PixelSetEncoder(input_dim, mlp1=mlp1, pooling=pooling, mlp2=mlp2, with_extra=with_extra,
                                                extra_size=extra_size)
         self.temporal_encoder = TempConv(input_size=mlp2[-1], nker=nker, seq_len=seq_len, nfc=mlp3, positional_encoding=not self.pos_enc_in_pse)
+        self.with_temp_feat = with_temp_feat
+        if with_temp_feat:
+            mlp4[0] = mlp4 + num_classes
         self.decoder = get_decoder(mlp4)
         self.name = '_'.join([self.spatial_encoder.name, self.temporal_encoder.name])
 
-    def forward(self, input, batch_positions):
+    def forward(self, input):
         """
          Args:
             input(tuple): (Pixel-Set, Pixel-Mask) or ((Pixel-Set, Pixel-Mask), Extra-features)
@@ -264,13 +280,14 @@ class PseTempCNN(nn.Module):
             Pixel-Mask : Batch_size x Sequence length x Number of pixels
             Extra-features : Batch_size x Sequence length x Number of features
         """
-
+        batch_positions = input['dates']
         pad_mask = (input[0][0] == 0).all(dim=-1).all(dim=-1)  # BxT pad mask
-        out = self.spatial_encoder(input, pad_mask=pad_mask)
+        out = self.spatial_encoder(input['input'], pad_mask=pad_mask)
         out = self.temporal_encoder(out, pad_mask=pad_mask, batch_positions=batch_positions)
-        # out = self.spatial_encoder(input)
-        #
-        # out = self.temporal_encoder(out)
+
+        if self.with_temp_feat:
+            out = torch.cat([out, input['temp_feat'].to(out.device)], dim=1)
+
         out = self.decoder(out)
         return out
 
