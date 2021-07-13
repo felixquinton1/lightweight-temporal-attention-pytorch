@@ -18,7 +18,7 @@ class PseLTae(nn.Module):
     def __init__(self, input_dim=10, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[128, 128], with_extra=True,
                  extra_size=4,
                  n_head=16, d_k=8, d_model=256, mlp3=[256, 128], dropout=0.2, T=1000, len_max_seq=24,
-                 mlp4=[128, 64, 32, 20], return_att=False, with_temp_feat=True, num_classes=20):
+                 mlp4=[128, 64, 32, 20], return_att=False, with_temp_feat=True):
         super(PseLTae, self).__init__()
 
         self.spatial_encoder = PixelSetEncoder(input_dim, mlp1=mlp1, pooling=pooling, mlp2=mlp2, with_extra=with_extra,
@@ -28,8 +28,6 @@ class PseLTae(nn.Module):
                                            T=T, len_max_seq=len_max_seq, return_att=return_att,
                                            positional_encoding=True)
         self.with_temp_feat = with_temp_feat
-        if with_temp_feat:
-            mlp4[0] = mlp4 + num_classes
         self.decoder = get_decoder(mlp4)
         self.return_att = return_att
 
@@ -43,7 +41,7 @@ class PseLTae(nn.Module):
         """
 
         batch_positions = input['dates']
-        pad_mask = (input[0][0] == 0).all(dim=-1).all(dim=-1)  # BxT pad mask
+        pad_mask = (input['input'][0][0] == 0).all(dim=-1).all(dim=-1)  # BxT pad mask
         out = self.spatial_encoder(input['input'], pad_mask=pad_mask)
         out = self.temporal_encoder(out, pad_mask=pad_mask, batch_positions=batch_positions)
 
@@ -157,8 +155,6 @@ class PseTae(nn.Module):
                                                          positional_encoding=not self.pos_enc_in_pse)
 
         self.with_temp_feat = with_temp_feat
-        if with_temp_feat:
-            mlp4[0] = mlp4 + num_classes
         self.decoder = get_decoder(mlp4)
         self.name = '_'.join([self.spatial_encoder.name, self.temporal_encoder.name])
         self.return_att = return_att
@@ -216,8 +212,6 @@ class PseGru(nn.Module):
                                                extra_size=extra_size)
         self.temporal_encoder = GRU(in_channels=mlp2[-1], hidden_dim=hidden_dim, positional_encoding=not self.pos_enc_in_pse)
         self.with_temp_feat = with_temp_feat
-        if with_temp_feat:
-            mlp4[0] = mlp4 + num_classes
         self.decoder = get_decoder(mlp4)
         self.name = '_'.join([self.spatial_encoder.name, self.temporal_encoder.name])
 
@@ -267,8 +261,6 @@ class PseTempCNN(nn.Module):
                                                extra_size=extra_size)
         self.temporal_encoder = TempConv(input_size=mlp2[-1], nker=nker, seq_len=seq_len, nfc=mlp3, positional_encoding=not self.pos_enc_in_pse)
         self.with_temp_feat = with_temp_feat
-        if with_temp_feat:
-            mlp4[0] = mlp4 + num_classes
         self.decoder = get_decoder(mlp4)
         self.name = '_'.join([self.spatial_encoder.name, self.temporal_encoder.name])
 

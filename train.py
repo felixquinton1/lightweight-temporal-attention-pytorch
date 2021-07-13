@@ -65,7 +65,7 @@ def evaluation(model, criterion, loader, device, config, mode='val'):
 
     for (data, y) in tqdm(loader):
         y_true.extend(list(map(int, y)))
-        x = recursive_todevice(data['input'], device)
+        x = recursive_todevice(data, device)
         y = y.to(device)
 
         with torch.no_grad():
@@ -244,6 +244,8 @@ def get_multi_years_loaders(dt, kfold, config):
 def recursive_todevice(x, device):
     if isinstance(x, torch.Tensor):
         return x.to(device)
+    elif isinstance(x, dict):
+        return {k: recursive_todevice(v, device) for k, v in x.items()}
     else:
         return [recursive_todevice(c, device) for c in x]
 
@@ -367,7 +369,7 @@ def model_definition(config, dt, test=False, year=None):
             model_config.update(with_extra=True, extra_size=4)
 
         if config['tempfeat']:
-            model_config.update(with_temp_feat=True, num_classes=config['num_classes'])
+            model_config.update(with_temp_feat=True)
 
         model = PseLTae(**model_config)
     return model, model_config
@@ -380,7 +382,7 @@ def test_model(model, loader, config, device, path ,fold):
     model = model.to(device)
     model.apply(weight_init)
     criterion = FocalLoss(config['gamma'])
-    new_state_dict = torch.load(os.path.join(path,'Fold_{}'.format(fold),'model.pth.tar'))
+    new_state_dict = torch.load(os.path.join(path,'Fold_{}'.format(fold), 'model.pth.tar'))
     model_dict = {k: v for k, v in model.state_dict().items() if k != 'temporal_encoder.position_enc.weight'}
     model_dict_copy = {k: v for k, v in model.state_dict().items()}
     compatible_dict = {k: v for k, v in new_state_dict['state_dict'].items() if k in model_dict}
@@ -422,7 +424,8 @@ def main(config):
                                    years_list=config['year'], num_classes=config['num_classes']))
 
     device = torch.device(config['device'])
-
+    if config['tempfeat']:
+        config['mlp4'][0] = config['mlp4'][0] + config['num_classes'] * (len(config['year']) - 1)
     if not config['test_mode']:
 
         loaders, dt = get_multi_years_loaders(dt, config['kfold'], config)
@@ -503,9 +506,9 @@ if __name__ == '__main__':
     # Set-up parameters
     parser.add_argument('--dataset_folder', default='', type=str,
                         help='Path to the folder where the results are saved.')
-    parser.add_argument('--year', default=['2018','2019','2020'], type=str,
+    parser.add_argument('--year', default=['2018', '2019', '2020'], type=str,
                         help='The year of the data you want to use')
-    parser.add_argument('--res_dir', default='./results/tempfeat_concatenate_18_19_20', help='Path to the folder where the results should be stored')
+    parser.add_argument('--res_dir', default='./results/test', help='Path to the folder where the results should be stored')
     parser.add_argument('--num_workers', default=8, type=int, help='Number of data loading workers')
     parser.add_argument('--rdm_seed', default=1, type=int, help='Random seed')
     parser.add_argument('--device', default='cuda', type=str,
@@ -524,7 +527,7 @@ if __name__ == '__main__':
                         help='Path to the pre-trained model')
     # Training parameters
     parser.add_argument('--kfold', default=5, type=int, help='Number of folds for cross validation')
-    parser.add_argument('--epochs', default=100, type=int, help='Number of epochs per fold')
+    parser.add_argument('--epochs', default=1, type=int, help='Number of epochs per fold')
     parser.add_argument('--batch_size', default=128, type=int, help='Batch size')
     parser.add_argument('--lr', default=0.001, type=float, help='Learning rate')
     parser.add_argument('--gamma', default=1, type=float, help='Gamma parameter of the focal loss')
@@ -560,7 +563,7 @@ if __name__ == '__main__':
 
     ## Classifier
     parser.add_argument('--num_classes', default=20, type=int, help='Number of classes')
-    parser.add_argument('--mlp4', default='[188, 64, 32, 20]', type=str, help='Number of neurons in the layers of MLP4')
+    parser.add_argument('--mlp4', default='[128, 64, 32, 20]', type=str, help='Number of neurons in the layers of MLP4')
 
     ## Other methods (use one of the flags tae/gru/tcnn to train respectively a TAE, GRU or TempCNN instead of an L-TAE)
     ## see paper appendix for hyperparameters

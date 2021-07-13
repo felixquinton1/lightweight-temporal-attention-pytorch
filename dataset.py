@@ -160,14 +160,14 @@ class PixelSetData(data.Dataset):
             ef = (self.extra[str(self.pid[item][:-5])] - self.extra_m) / self.extra_s
             ef = torch.from_numpy(ef).float()
 
-            ef = torch.stack([ef for _ in range(data[0].shape[0])], dim=0)
+            ef = torch.stack([ef for _ in range(data['input'][0].shape[0])], dim=0)
             data['input'] = (data['input'], ef)
         if self.extra_feature_temp is not None:
-            temp_feat = np.zeros(self.num_classes, dtype=int)
+            temp_feat = np.zeros(self.num_classes * (len(self.years_list) - 1), dtype=int)
             for i in self.years_list:
-                if i != self.year:
-                    shift = int(self.year) - int(i)
-                    temp_feat[self.target[item + self.len * shift]] += 1
+                if i < self.pid[item][-4:]:
+                    shift = int(self.pid[item][-4:]) - int(i)
+                    temp_feat[self.target[item - self.len * shift] + (self.num_classes * (shift - 1))] += 1
 
             data['temp_feat'] = temp_feat
         dates = self.date_positions[self.pid[item][-4:]]
