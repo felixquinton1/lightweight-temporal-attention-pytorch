@@ -161,15 +161,15 @@ class PixelSetData(data.Dataset):
             data = (data, ef)
         temp_feat=None
         if self.extra_feature_temp is not None:
-            temp_feat = np.zeros(20, dtype=int)
+            temp_feat = np.zeros(60, dtype=int)
             if self.pid[item][-4:] == '2018':
-                temp_feat[self.target[item + 103602]] += 1
-                temp_feat[self.target[item + 207204]] += 1
+                temp_feat[self.target[item + 103602] + 20] += 1
+                temp_feat[self.target[item + 207204] + 40] += 1
             if self.pid[item][-4:] == '2019':
                 temp_feat[self.target[item - 103602]] += 1
-                temp_feat[self.target[item + 103602]] += 1
+                temp_feat[self.target[item + 103602] + 40] += 1
             elif self.pid[item][-4:] == '2020':
-                temp_feat[self.target[item - 103602]] += 1
+                temp_feat[self.target[item - 103602] + 20] += 1
                 temp_feat[self.target[item - 207204]] += 1
         dates = self.date_positions[self.pid[item][-4:]]
         dates = torch.tensor(dates)
