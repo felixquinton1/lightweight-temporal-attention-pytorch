@@ -163,19 +163,20 @@ class PixelSetData(data.Dataset):
             ef = torch.stack([ef for _ in range(data['input'][0].shape[0])], dim=0)
             data['input'] = (data['input'], ef)
         if self.extra_feature_temp is not None:
-            temp_feat = np.zeros(self.num_classes * (len(self.years_list) - 1), dtype=int)
+            temp_feat = np.zeros(self.num_classes, dtype=int)
             for i in self.years_list:
-                if i < self.pid[item][-4:]:
-                    shift = int(self.pid[item][-4:]) - int(i)
-                    temp_feat[self.target[item - self.len * shift] + (self.num_classes * (shift - 1))] += 1
+                shift = int(self.pid[item][-4:]) - int(i)
+                # if i < self.pid[item][-4:]:
+                if shift == 1:
+                    # temp_feat[self.target[item - self.len * shift] + (self.num_classes * (shift - 1))] += 1
+                    temp_feat[self.target[item - self.len * shift]] += 1
 
             data['temp_feat'] = temp_feat
         dates = self.date_positions[self.pid[item][-4:]]
         data['dates'] = torch.tensor(dates)
         if self.return_id:
-            return data, torch.from_numpy(np.array(y, dtype=int)), self.pid[item]
-        else:
-            return data, torch.from_numpy(np.array(y, dtype=int))
+            data['pid'] = self.pid[item]
+        return data, torch.from_numpy(np.array(y, dtype=int))
 
 class PixelSetData_preloaded(PixelSetData):
     """ Wrapper class to load all the dataset to RAM at initialization (when the hardware permits it).

@@ -18,7 +18,7 @@ class PseLTae(nn.Module):
     def __init__(self, input_dim=10, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[128, 128], with_extra=True,
                  extra_size=4,
                  n_head=16, d_k=8, d_model=256, mlp3=[256, 128], dropout=0.2, T=1000, len_max_seq=24,
-                 mlp4=[128, 64, 32, 20], return_att=False, with_temp_feat=True):
+                 mlp4=[128, 64, 32, 20], return_att=False, return_embedding=False, with_temp_feat=True):
         super(PseLTae, self).__init__()
 
         self.spatial_encoder = PixelSetEncoder(input_dim, mlp1=mlp1, pooling=pooling, mlp2=mlp2, with_extra=with_extra,
@@ -27,10 +27,11 @@ class PseLTae(nn.Module):
                                            d_model=d_model, n_neurons=mlp3, dropout=dropout,
                                            T=T, len_max_seq=len_max_seq, return_att=return_att,
                                            positional_encoding=True)
+
         self.with_temp_feat = with_temp_feat
         self.decoder = get_decoder(mlp4)
         self.return_att = return_att
-
+        self.return_embedding = return_embedding
     def forward(self, input):
         """
          Args:
@@ -48,7 +49,12 @@ class PseLTae(nn.Module):
         if self.with_temp_feat:
             out = torch.cat([out, input['temp_feat'].to(out.device)], dim=1)
 
-        if self.return_att:
+        if self.return_embedding:
+            emb = out
+            out = self.decoder(out)
+            return out, emb
+
+        elif self.return_att:
             out, att = out
             out = self.decoder(out)
             return out, att
