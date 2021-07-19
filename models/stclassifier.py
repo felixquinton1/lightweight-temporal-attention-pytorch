@@ -302,5 +302,37 @@ class PseTempCNN(nn.Module):
         return total
 
 
+class ClassifierOnly(nn.Module):
+    """
+        Pixel-Set encoder + GRU
+        """
+
+    def __init__(self, mlp4=[128, 64, 32, 20], with_temp_feat=True):
+        super(ClassifierOnly, self).__init__()
+        self.decoder = get_decoder(mlp4)
+
+    def forward(self, input):
+        """
+         Args:
+            input(tuple): (Pixel-Set, Pixel-Mask) or ((Pixel-Set, Pixel-Mask), Extra-features)
+            Pixel-Set : Batch_size x Sequence length x Channel x Number of pixels
+            Pixel-Mask : Batch_size x Sequence length x Number of pixels
+            Extra-features : Batch_size x Sequence length x Number of features
+        """
+
+        # if self.with_temp_feat:
+        #     out = torch.cat([input, input['temp_feat'].to(input.device)], dim=1)
+
+        out = self.decoder(input['input'])
+        return out
+
+    def param_ratio(self):
+        total = get_ntrainparams(self)
+        c = get_ntrainparams(self.decoder)
+
+        print('TOTAL TRAINABLE PARAMETERS : {}'.format(total))
+        print('RATIOS: Classifier {:5.1f}%'.format(c / total * 100))
+        return total
+
 def get_ntrainparams(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)

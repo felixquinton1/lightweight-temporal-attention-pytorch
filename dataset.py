@@ -76,6 +76,7 @@ class PixelSetData(data.Dataset):
             self.target = list(np.array(self.target)[sub_indices])
             self.len = len(sub_indices)
 
+
         with open(os.path.join(folder, 'META', 'dates.json'), 'r') as file:
             raw_dates = json.loads(file.read())
         dates = {year: []}
@@ -154,8 +155,7 @@ class PixelSetData(data.Dataset):
             x = x + np.clip(sigma * np.random.randn(*x.shape), -1 * clip, clip)
 
         mask = np.stack([mask for _ in range(x.shape[0])], axis=0)  # Add temporal dimension to mask
-        data = {'input': (Tensor(x), Tensor(mask)) }
-
+        data = {'input': (Tensor(x), Tensor(mask))}
         if self.extra_feature is not None:
             ef = (self.extra[str(self.pid[item][:-5])] - self.extra_m) / self.extra_s
             ef = torch.from_numpy(ef).float()
@@ -164,12 +164,13 @@ class PixelSetData(data.Dataset):
             data['input'] = (data['input'], ef)
         if self.extra_feature_temp is not None:
             temp_feat = np.zeros(self.num_classes, dtype=int)
-            for i in self.years_list:
-                shift = int(self.pid[item][-4:]) - int(i)
-                # if i < self.pid[item][-4:]:
-                if shift == 1:
-                    # temp_feat[self.target[item - self.len * shift] + (self.num_classes * (shift - 1))] += 1
-                    temp_feat[self.target[item - self.len * shift]] += 1
+            if(int(self.pid[item][-4:]) != 2018):
+                for i in self.years_list:
+                    shift = int(self.pid[item][-4:]) - int(i)
+                    # if i < self.pid[item][-4:]:
+                    if shift >= 1:
+                        # temp_feat[self.target[item - self.len * shift] + (self.num_classes * (shift - 1))] += 1
+                        temp_feat[self.target[item - self.len * shift]] += 1
 
             data['temp_feat'] = temp_feat
         dates = self.date_positions[self.pid[item][-4:]]
@@ -195,6 +196,96 @@ class PixelSetData_preloaded(PixelSetData):
     def __getitem__(self, item):
         return self.samples[item]
 
+class PixelSetData_classifier_only(data.Dataset):
+    def __init__(self, folder, labels, year=None, sub_classes=None, extra_feature_temp=None,return_id=False,
+                 num_classes=20, years_list=[]):
+        """
+
+        Args:
+            folder (str): path to the main folder of the dataset, formatted as indicated in the readme
+            labels (str): name of the nomenclature to use in the labels.json file
+            npixel (int): Number of sampled pixels in each parcel
+            sub_classes (list): If provided, only the samples from the given list of classes are considered.
+            (Can be used to remove classes with too few samples)
+            norm (tuple): (mean,std) tuple to use for normalization
+            extra_feature (str): name of the additional static feature file to use
+            jitter (tuple): if provided (sigma, clip) values for the addition random gaussian noise
+            return_id (bool): if True, the id of the yielded item is also returned (useful for inference)
+        """
+        super(PixelSetData_classifier_only, self).__init__()
+
+        self.folder = folder
+        self.year = year
+        self.data_folder = os.path.join(folder, 'DATA', year)
+        self.meta_folder = os.path.join(folder, 'META')
+        self.labels = labels
+        self.extra_feature_temp = extra_feature_temp
+        self.return_id = return_id
+        self.num_classes = num_classes
+        self.years_list = years_list
+
+        l = [f for f in os.listdir(self.data_folder) if f.endswith('.npy')]
+        self.pid = [str(f.split('.')[0]) + "_" + year for f in l]
+        self.pid = list(np.sort(self.pid))
+
+        self.pid = list(map(str, self.pid))
+
+        self.len = len(self.pid)
+
+        # Get Labels
+        if sub_classes is not None:
+            sub_indices = []
+            num_classes = len(sub_classes)
+            convert = dict((c, i) for i, c in enumerate(sub_classes))
+
+        with open(os.path.join(folder, 'META', 'labels.json'), 'r') as file:
+            d = json.loads(file.read())
+            self.target = []
+            for i, p in enumerate(self.pid):
+                t = d[labels][p[:-5]]
+                self.target.append(t)
+                if sub_classes is not None:
+                    if t in sub_classes:
+                        sub_indices.append(i)
+                        self.target[-1] = convert[self.target[-1]]
+
+        if sub_classes is not None:
+            self.pid = list(np.array(self.pid)[sub_indices])
+            self.target = list(np.array(self.target)[sub_indices])
+            self.len = len(sub_indices)
+
+    def __len__(self):
+        return self.len
+
+    def __getitem__(self, item):
+        """
+        Returns a Pixel-Set sequence tensor with its pixel mask and optional additional features.
+        For each item npixel pixels are randomly drawn from the available pixels.
+        If the total number of pixel is too small one arbitrary pixel is repeated. The pixel mask keeps track of true
+        and repeated pixels.
+        Returns:
+              (Pixel-Set, Pixel-Mask) or ((Pixel-Set, Pixel-Mask), Extra-features) with:
+                Pixel-Set: Sequence_length x Channels x npixel
+                Pixel-Mask : Sequence_length x npixel
+                Extra-features : Sequence_length x Number of additional features
+
+        """
+        x0 = np.load(os.path.join(self.folder, 'DATA', self.pid[item][-4:], '{}.npy'.format(self.pid[item][:-5])))[0:128]
+        y = self.target[item]
+        data = {'input': Tensor(x0)}
+
+        if self.extra_feature_temp is not None:
+            temp_feat = np.zeros(self.num_classes, dtype=int)
+            if(int(self.pid[item][-4:]) != 2018):
+                for i in self.years_list:
+                    shift = int(self.pid[item][-4:]) - int(i)
+                    if shift >= 1:
+                        temp_feat[self.target[item - self.len * shift]] += 1
+
+            data['temp_feat'] = temp_feat
+        if self.return_id:
+            data['pid'] = self.pid[item]
+        return data, torch.from_numpy(np.array(y, dtype=int))
 
 def parse(date):
     d = str(date)

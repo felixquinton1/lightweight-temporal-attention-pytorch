@@ -10,8 +10,8 @@ import pickle as pkl
 import argparse
 import pprint
 from tqdm import tqdm
-from models.stclassifier import PseTae, PseLTae, PseGru, PseTempCNN
-from dataset import PixelSetData, PixelSetData_preloaded
+from models.stclassifier import PseTae, PseLTae, PseGru, PseTempCNN, ClassifierOnly
+from dataset import PixelSetData, PixelSetData_preloaded, PixelSetData_classifier_only
 from learning.focal_loss import FocalLoss
 from learning.weight_init import weight_init
 from learning.metrics import mIou, confusion_matrix_analysis
@@ -46,8 +46,8 @@ def train_epoch(model, optimizer, criterion, data_loader, device, config):
         loss_meter.add(loss.item())
 
         if (i + 1) % config['display_step'] == 0:
-            print('Step [{}/{}], Loss: {:.4f}, Acc : {:.2f}'.format(i + 1, len(data_loader), loss_meter.value()[0],
-                                                                    acc_meter.value()[0]))
+            print('Step [{}/{}], Loss: {:.4f}, Acc : {:.2f}, IoU : {:.4f}'.format(i + 1, len(data_loader), loss_meter.value()[0],
+                                                                    acc_meter.value()[0], mIou(y_true, y_pred, config['num_classes'])))
 
     epoch_metrics = {'train_loss': loss_meter.value()[0],
                      'train_accuracy': acc_meter.value()[0],
@@ -101,7 +101,7 @@ def evaluation(model, criterion, loader, device, config, mode='val', fold=None):
         if config['save_embedding']:
             save_embedding(emb, fold, config)
         if config['save_pred'] :
-            save_pred(pred, config)
+            save_pred(pred, fold, config)
 
         return metrics, confusion_matrix(y_true, y_pred, labels=list(range(config['num_classes'])))
 
@@ -197,19 +197,36 @@ def get_loaders(dt, kfold, config):
         loader_seq.append((train_loader, validation_loader, test_loader))
     return loader_seq
 
-def get_test_loaders(dt,kfold, indices, config):
+def get_test_loaders(dt,kfold,config):
 
-    loaders = []
+    indices = [np.array(range(i * len(dt[i]), (i + 1) * len(dt[i]))) for i in range(len(dt))]
+    np.random.shuffle(indices[0])
+    if len(indices) > 1:
+        for i in range(1, len(indices)):
+            indices[i] = np.array(indices[0]) + len(indices[0]) * i
+
     kf = KFold(n_splits=kfold, shuffle=False)
-    indices_seq = list(kf.split(list(range(len(dt)))))
-    for trainval, test_indices in indices_seq:
-        test_indices = [indices[i] for i in test_indices]
-        test_sampler = data.sampler.SubsetRandomSampler(test_indices)
-        test_loader = data.DataLoader(dt, batch_size=config['batch_size'],
-                                      sampler=test_sampler,
-                                      num_workers=config['num_workers'], drop_last=True)
-        loaders.append(test_loader)
-    return loaders
+    indices_seq = [list(kf.split(list(range(len(i))))) for i in dt]
+
+    test_loader = [[] for i in range(kfold)]
+    merged_dt = dt[0]
+
+    for i in range(1, len(dt)):
+        merged_dt.date_positions.update(dt[i].date_positions)
+        merged_dt.pid += dt[i].pid
+        merged_dt.target += dt[i].target
+
+    for idx, dataset in enumerate(dt):
+        for id_fold, (_, test_indices) in enumerate(indices_seq[idx]):
+            test_indices = [indices[idx][i] for i in test_indices]
+
+            test_sampler = data.sampler.SubsetRandomSampler(test_indices)
+
+            test_loader[id_fold].append(data.DataLoader(merged_dt, batch_size=config['batch_size'],
+                                                        sampler=test_sampler,
+                                                        num_workers=config['num_workers'],
+                                                        collate_fn=pad_collate))
+    return test_loader
 
 def get_multi_years_loaders(dt, kfold, config):
     indices = [np.array(range(i * len(dt[i]), (i + 1) * len(dt[i]))) for i in range(len(dt))]
@@ -241,7 +258,7 @@ def get_multi_years_loaders(dt, kfold, config):
 
             test_loader[id_fold].append(data.DataLoader(merged_dt, batch_size=config['batch_size'],
                                                         sampler=test_sampler,
-                                                        num_workers=config['num_workers'], drop_last=True,
+                                                        num_workers=config['num_workers'],
                                                         collate_fn=pad_collate))
             validation_indices[id_fold] += trainval[-ntest:]
             train_indices[id_fold] += trainval[:-ntest]
@@ -251,10 +268,10 @@ def get_multi_years_loaders(dt, kfold, config):
 
         train_loader = data.DataLoader(merged_dt, batch_size=config['batch_size'],
                                        sampler=train_sampler,
-                                       num_workers=config['num_workers'], drop_last=True, collate_fn=pad_collate)
+                                       num_workers=config['num_workers'], collate_fn=pad_collate)
         validation_loader = data.DataLoader(merged_dt, batch_size=config['batch_size'],
                                             sampler=validation_sampler,
-                                            num_workers=config['num_workers'], drop_last=True, collate_fn=pad_collate)
+                                            num_workers=config['num_workers'], collate_fn=pad_collate)
 
         loader_seq.append((train_loader, validation_loader, test_loader[i]))
     return loader_seq, merged_dt
@@ -273,17 +290,20 @@ def recursive_todevice(x, device):
 
 def prepare_output(config):
     os.makedirs(config['res_dir'], exist_ok=True)
-    if(config['save_pred']):
-        with open(os.path.join(config['res_dir'], 'pred_by_parcel.json'), 'w') as file:
-            file.write(json.dumps({}))
+
     for fold in range(1, config['kfold'] + 1):
         if not config['test_mode']:
             for year in config['year']:
                 os.makedirs(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), year), exist_ok=True)
         os.makedirs(os.path.join(config['res_dir'],'Fold_{}'.format(fold)), exist_ok=True)
-        if (config['save_pred']):
+        if (config['save_embedding']):
             with open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), 'embedding_by_parcel.json'), 'w') as file:
                 file.write(json.dumps({}))
+
+        if (config['save_pred']):
+            with open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), 'pred_by_parcel.json'), 'w') as file:
+                file.write(json.dumps({}))
+
     os.makedirs(os.path.join(config['res_dir'], 'overall'), exist_ok=True)
 
 
@@ -291,12 +311,11 @@ def checkpoint(fold, log, config):
     with open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), 'trainlog.json'), 'w') as outfile:
         json.dump(log, outfile, indent=4)
 
-def save_pred(pred, config):
-    with open(os.path.join(config['res_dir'], 'pred_by_parcel.json'), 'r') as outfile:
+def save_pred(pred, fold, config):
+    with open(os.path.join(config['res_dir'],'Fold_{}'.format(fold), 'pred_by_parcel.json'), 'r') as outfile:
         prediction = json.load(outfile)
         prediction.update(pred)
-
-        with open(os.path.join(config['res_dir'], 'pred_by_parcel.json'),
+        with open(os.path.join(config['res_dir'],'Fold_{}'.format(fold), 'pred_by_parcel.json'),
                   'w') as file:
             file.write(json.dumps(prediction, indent=4))
 
@@ -398,6 +417,10 @@ def model_definition(config, dt, test=False, year=None):
             model_config.update(with_extra=True, extra_size=4)
 
         model = PseTempCNN(**model_config)
+    elif config['classifier_only']:
+        model_config = dict(mlp4=config['mlp4'])
+        model = ClassifierOnly(**model_config)
+
     else:
         model_config = dict(input_dim=config['input_dim'], mlp1=config['mlp1'], pooling=config['pooling'],
                             mlp2=config['mlp2'], n_head=config['n_head'], d_k=config['d_k'], mlp3=config['mlp3'],
@@ -451,6 +474,12 @@ def main(config):
                                              sub_classes=subset,
                                              norm=mean_std,
                                              extra_feature=extra))
+    elif config['classifier_only']:
+        dt = []
+        for year in config['year']:
+            dt.append(PixelSetData_classifier_only(config['dataset_folder'], labels='CODE9_' + year,
+                                       sub_classes=subset,extra_feature_temp=extra_temp, year=year,
+                                       years_list=config['year'], num_classes=config['num_classes'], return_id=True))
     else:
         dt = []
         for year in config['year']:
@@ -461,9 +490,14 @@ def main(config):
                                    years_list=config['year'], num_classes=config['num_classes'], return_id=True))
 
     device = torch.device(config['device'])
+
+
     if config['tempfeat']:
-        # config['mlp4'][0] = config['mlp4'][0] + config['num_classes'] * (len(config['year']) - 1)
         config['mlp4'][0] = config['mlp4'][0] + config['num_classes']
+
+    # if config['classifier_only']:
+    #     config['mlp4'][0] = config['mlp4'][0] * len(config['year'])
+
     if not config['test_mode']:
 
         loaders, dt = get_multi_years_loaders(dt, config['kfold'], config)
@@ -511,12 +545,12 @@ def main(config):
             for year, i in enumerate(test_loader):
                 print("Année: {} ".format(config['year'][year]))
 
-                # model_config['len_max_seq'] = config['sly'][config['year'][year]]
                 model_test, model_test_config = model_definition(config, dt, test=True, year=year)
                 path = config['res_dir']
                 
                 test_metrics, conf_mat, config = test_model(model_test, i, config, device, path, fold+1)
                 save_results(fold + 1, test_metrics, conf_mat, config, year)
+
             # 1 fold (no cross validation)
             # break
         for year in config['year']:
@@ -524,18 +558,18 @@ def main(config):
         overall_performance(config)
 
     else:
-        indices = list(range(len(dt[0])))
-        np.random.shuffle(indices)
-        for year in range(len(dt)):
-            print("Année: {} ".format(config['year'][year]))
-            loaders = get_test_loaders(dt[year], config['kfold'], indices, config)
-            for fold, loader in enumerate(loaders):
-                print("Fold: {} ".format(fold+1))
-                model, model_config = model_definition(config, dt[year], test=True, year=year)
+        loaders = get_test_loaders(dt, config['kfold'],config)
+        for fold, loader_fold in enumerate(loaders):
+            print("Fold: {} ".format(fold + 1))
+            for year, loader in enumerate(loader_fold):
+                print("Année: {} ".format(config['year'][year]))
+                model, model_config = model_definition(config, dt, test=True, year=year)
                 path = config['loaded_model']
                 test_metrics, conf_mat, config = test_model(model, loader, config, device, path, fold+1)
                 save_test_mode_results(test_metrics, conf_mat, config, config['year'][year], fold+1)
-            overall_performance_by_year(config, config['year'][year])
+        for year in config['year']:
+            overall_performance_by_year(config, year)
+        overall_performance(config)
 
 
 
@@ -546,11 +580,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     # Set-up parameters
-    parser.add_argument('--dataset_folder', default='', type=str,
+    parser.add_argument('--dataset_folder', default='/home/FQuinton/Bureau/data_pse', type=str,
                         help='Path to the folder where the results are saved.')
-    parser.add_argument('--year', default=['2018','2019','2020'], type=str,
+    parser.add_argument('--year', default=['2020'], type=str,
                         help='The year of the data you want to use')
-    parser.add_argument('--res_dir', default='./results/labels_1_year', help='Path to the folder where the results should be stored')
+    parser.add_argument('--res_dir', default='./results/2020_on_2020', help='Path to the folder where the results should be stored')
     parser.add_argument('--num_workers', default=8, type=int, help='Number of data loading workers')
     parser.add_argument('--rdm_seed', default=1, type=int, help='Random seed')
     parser.add_argument('--device', default='cuda', type=str,
@@ -562,7 +596,7 @@ if __name__ == '__main__':
     parser.set_defaults(preload=False)
 
     #Parameters relatives to test
-    parser.add_argument('--test_mode', default=False, type=bool,
+    parser.add_argument('--test_mode', default=True, type=bool,
                         help='Load a pre-trained model and test on the whole data set')
     parser.add_argument('--loaded_model',
                         default='/home/FQuinton/Bureau/lightweight-temporal-attention-pytorch/models_saved/2018',
@@ -570,12 +604,13 @@ if __name__ == '__main__':
                         help='Path to the pre-trained model')
     parser.add_argument('--save_pred', default=False, type=bool,
                         help='Save predictions by parcel during test')
-    parser.add_argument('--save_embedding', default=False, type=bool,
+    parser.add_argument('--save_embedding', default=True, type=bool,
                         help='Save embeddings by parcel during test')
+
 
     # Training parameters
     parser.add_argument('--kfold', default=5, type=int, help='Number of folds for cross validation')
-    parser.add_argument('--epochs', default=100, type=int, help='Number of epochs per fold')
+    parser.add_argument('--epochs', default=10, type=int, help='Number of epochs per fold')
     parser.add_argument('--batch_size', default=128, type=int, help='Batch size')
     parser.add_argument('--lr', default=0.001, type=float, help='Learning rate')
     parser.add_argument('--gamma', default=1, type=float, help='Gamma parameter of the focal loss')
@@ -597,7 +632,7 @@ if __name__ == '__main__':
     parser.add_argument('--T', default=1000, type=int, help='Maximum period for the positional encoding')
     parser.add_argument('--positions', default='bespoke', type=str,
                         help='Positions to use for the positional encoding (bespoke / order)')
-    parser.add_argument('--lms', default=36, type=int,
+    parser.add_argument('--lms', default=29, type=int,
                         help='Maximum sequence length for positional encoding (only necessary if positions == order)')
     parser.add_argument('--sly', default={'2018': 36, '2019': 27, '2020': 29},
                         help='Sequence length by year for positional encoding (only necessary if positions == order)')
@@ -606,12 +641,13 @@ if __name__ == '__main__':
                         help="size of the embeddings (E), if input vectors are of a different size, a linear layer is used to project them to a d_model-dimensional space"
                         )
 
-    parser.add_argument('--tempfeat', default=True, type=bool,
-                        help='If true the past years labels are used before classification PSE.')
+
 
     ## Classifier
+    parser.add_argument('--tempfeat', default=False, type=bool,
+                        help='If true the past years labels are used before classification PSE.')
     parser.add_argument('--num_classes', default=20, type=int, help='Number of classes')
-    parser.add_argument('--mlp4', default='[128, 64, 32, 20]', type=str, help='Number of neurons in the layers of MLP4')
+    parser.add_argument('--mlp4', default='[128, 64,32, 20]', type=str, help='Number of neurons in the layers of MLP4')
 
     ## Other methods (use one of the flags tae/gru/tcnn to train respectively a TAE, GRU or TempCNN instead of an L-TAE)
     ## see paper appendix for hyperparameters
@@ -623,6 +659,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--tcnn', dest='tcnn', action='store_true', help="Temporal Convolutions for temporal encoding")
     parser.add_argument('--nker', default='[32,32,128]', type=str, help="Number of successive convolutional kernels ")
+    parser.add_argument('--classifier_only', default=False, type=bool, help="Only train the classifier")
 
     parser.set_defaults(gru=False, tcnn=False, tae=False)
 

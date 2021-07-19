@@ -1,22 +1,20 @@
 {
     "dataset_folder": "/home/FQuinton/Bureau/data_pse",
     "year": [
-        "2018",
-        "2019",
         "2020"
     ],
-    "res_dir": "./results/labels_1_year",
+    "res_dir": "./results/2020_on_2020",
     "num_workers": 8,
     "rdm_seed": 1,
     "device": "cuda",
     "display_step": 50,
     "preload": false,
-    "test_mode": false,
+    "test_mode": true,
     "loaded_model": "/home/FQuinton/Bureau/lightweight-temporal-attention-pytorch/models_saved/2018",
     "save_pred": false,
-    "save_embedding": false,
+    "save_embedding": true,
     "kfold": 5,
-    "epochs": 100,
+    "epochs": 10,
     "batch_size": 128,
     "lr": 0.001,
     "gamma": 1,
@@ -41,7 +39,7 @@
     ],
     "T": 1000,
     "positions": "bespoke",
-    "lms": 36,
+    "lms": 29,
     "sly": {
         "2018": 36,
         "2019": 27,
@@ -49,10 +47,10 @@
     },
     "dropout": 0.2,
     "d_model": 256,
-    "tempfeat": true,
+    "tempfeat": false,
     "num_classes": 20,
     "mlp4": [
-        148,
+        128,
         64,
         32,
         20
@@ -66,5 +64,6 @@
         32,
         128
     ],
-    "N_params": 132116
+    "classifier_only": false,
+    "N_params": 130836
 }
