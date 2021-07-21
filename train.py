@@ -34,6 +34,7 @@ def train_epoch(model, optimizer, criterion, data_loader, device, config):
         y = y.to(device)
 
         optimizer.zero_grad()
+
         out = model(x)
         loss = criterion(out, y.long())
         loss.backward()
@@ -45,7 +46,7 @@ def train_epoch(model, optimizer, criterion, data_loader, device, config):
         acc_meter.add(pred, y)
         loss_meter.add(loss.item())
 
-        if (i + 1) % config['display_step'] == 0:
+        if (i + 1) % config['display_step'] == 1:
             print('Step [{}/{}], Loss: {:.4f}, Acc : {:.2f}, IoU : {:.4f}'.format(i + 1, len(data_loader), loss_meter.value()[0],
                                                                     acc_meter.value()[0], mIou(y_true, y_pred, config['num_classes'])))
 
@@ -70,10 +71,10 @@ def evaluation(model, criterion, loader, device, config, mode='val', fold=None):
         y = y.to(device)
 
         with torch.no_grad():
-            if(config['save_embedding']):
+            if config['save_embedding'] and mode == 'test':
                 prediction, embedding = model(x)
                 for i, id in enumerate(data['pid']):
-                    emb[id] = embedding[i].tolist()
+                    save_embedding(embedding[i].tolist(), id, fold, config)
             else:
                 prediction = model(x)
 
@@ -86,7 +87,6 @@ def evaluation(model, criterion, loader, device, config, mode='val', fold=None):
 
         acc_meter.add(prediction, y)
         loss_meter.add(loss.item())
-
         y_p = prediction.argmax(dim=1).cpu().numpy()
         y_pred.extend(list(y_p))
 
@@ -98,8 +98,6 @@ def evaluation(model, criterion, loader, device, config, mode='val', fold=None):
         return metrics
 
     if mode == 'test':
-        if config['save_embedding']:
-            save_embedding(emb, fold, config)
         if config['save_pred'] :
             save_pred(pred, fold, config)
 
@@ -228,6 +226,81 @@ def get_test_loaders(dt,kfold,config):
                                                         collate_fn=pad_collate))
     return test_loader
 
+def get_embedding_loaders(dt,kfold,fold, config):
+
+    indices = [np.array(range(i * len(dt[i]), (i + 1) * len(dt[i]))) for i in range(len(dt))]
+    np.random.shuffle(indices[0])
+    if len(indices) > 1:
+        for i in range(1, len(indices)):
+            indices[i] = np.array(indices[0]) + len(indices[0]) * i
+
+    test_loader = []
+    merged_dt = dt[0]
+
+    for i in range(1, len(dt)):
+        merged_dt.date_positions.update(dt[i].date_positions)
+        merged_dt.pid += dt[i].pid
+        merged_dt.target += dt[i].target
+
+    for idx, dataset in enumerate(dt):
+        test_indices = indices[idx]
+
+        test_sampler = data.sampler.SubsetRandomSampler(test_indices)
+
+        test_loader.append(data.DataLoader(merged_dt, batch_size=config['batch_size'],
+                                                    sampler=test_sampler,
+                                                    num_workers=config['num_workers'],
+                                                    collate_fn=pad_collate))
+    return test_loader
+
+def classif_only_loader(dt,kfold, fold, config):
+    indices = [np.array(range(i * len(dt[i]), (i + 1) * len(dt[i]))) for i in range(len(dt))]
+    np.random.shuffle(indices[0])
+
+    kf = KFold(n_splits=kfold, shuffle=False)
+    indices_seq = [list(kf.split(list(range(len(i)))))[fold] for i in dt]
+    ntest = len(indices_seq[0][1])
+
+    loader_seq = []
+    test_loader = []
+    validation_indices = []
+    train_indices = []
+    merged_dt = dt[0]
+    for i in range(1, len(dt)):
+        merged_dt.pid += dt[i].pid
+        merged_dt.target += dt[i].target
+
+    for idx, dataset in enumerate(dt):
+        trainval = indices_seq[idx][0]
+        test_indices = indices_seq[idx][1]
+        trainval = [indices[idx][i] for i in trainval]
+        test_indices = [indices[idx][i] for i in test_indices]
+
+        test_sampler = data.sampler.SubsetRandomSampler(test_indices)
+
+        test_loader.append(data.DataLoader(merged_dt, batch_size=config['batch_size'],
+                                                    sampler=test_sampler,
+                                                    num_workers=config['num_workers'],
+                                                    collate_fn=pad_collate))
+        validation_indices += trainval[-ntest:]
+        train_indices += trainval[:-ntest]
+    train_sampler = data.sampler.SubsetRandomSampler(train_indices)
+    validation_sampler = data.sampler.SubsetRandomSampler(validation_indices)
+
+    train_loader = data.DataLoader(merged_dt, batch_size=config['batch_size'],
+                                   sampler=train_sampler,
+                                   num_workers=config['num_workers'], collate_fn=pad_collate)
+    validation_loader = data.DataLoader(merged_dt, batch_size=config['batch_size'],
+                                        sampler=validation_sampler,
+                                        num_workers=config['num_workers'], collate_fn=pad_collate)
+
+    loader_seq.append(train_loader)
+    loader_seq.append(validation_loader)
+    loader_seq.append(test_loader)
+    return loader_seq, merged_dt
+
+
+
 def get_multi_years_loaders(dt, kfold, config):
     indices = [np.array(range(i * len(dt[i]), (i + 1) * len(dt[i]))) for i in range(len(dt))]
     np.random.shuffle(indices[0])
@@ -304,6 +377,12 @@ def prepare_output(config):
             with open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), 'pred_by_parcel.json'), 'w') as file:
                 file.write(json.dumps({}))
 
+    for fold in range(1, config['kfold'] + 1):
+        if (config['save_embedding']):
+            for year in config['sly'].keys():
+                os.makedirs(os.path.join(config['save_emb_dir'], 'Fold{}'.format(fold), year), exist_ok=True)
+
+
     os.makedirs(os.path.join(config['res_dir'], 'overall'), exist_ok=True)
 
 
@@ -319,14 +398,8 @@ def save_pred(pred, fold, config):
                   'w') as file:
             file.write(json.dumps(prediction, indent=4))
 
-def save_embedding(emb, fold, config):
-    with open(os.path.join(config['res_dir'],'Fold_{}'.format(fold), 'embedding_by_parcel.json'), 'r') as outfile:
-        embedding = json.load(outfile)
-        embedding.update(emb)
-    with open(os.path.join(config['res_dir'],'Fold_{}'.format(fold), 'embedding_by_parcel.json'),
-          'w') as file:
-        file.write(json.dumps(embedding, indent=4))
-
+def save_embedding(emb, key, fold, config):
+    np.save(os.path.join(config['save_emb_dir'], 'Fold{}'.format(fold), key[-4:], key[:-5]), emb)
 
 
 
@@ -475,17 +548,19 @@ def main(config):
                                              norm=mean_std,
                                              extra_feature=extra))
     elif config['classifier_only']:
-        dt = []
-        for year in config['year']:
-            dt.append(PixelSetData_classifier_only(config['dataset_folder'], labels='CODE9_' + year,
-                                       sub_classes=subset,extra_feature_temp=extra_temp, year=year,
-                                       years_list=config['year'], num_classes=config['num_classes'], return_id=True))
+        dt = [[] for fold in range(config['kfold'])]
+        for fold in range(0, config['kfold']):
+            for year in config['year']:
+                dt[fold].append(PixelSetData_classifier_only(config['dataset_folder'], labels='CODE9_' + year,
+                                                             sub_classes=subset, year=year, years_list=config['year'],
+                                                             num_classes=config['num_classes'], fold=fold,
+                                                             return_id=True))
+
     else:
         dt = []
         for year in config['year']:
             dt.append(PixelSetData(config['dataset_folder'], labels='CODE9_' + year, npixel=config['npixel'],
-                                   sub_classes=subset,
-                                   norm=mean_std,
+                                   sub_classes=subset, norm=mean_std,
                                    extra_feature=extra, extra_feature_temp=extra_temp, year=year,
                                    years_list=config['year'], num_classes=config['num_classes'], return_id=True))
 
@@ -495,10 +570,66 @@ def main(config):
     if config['tempfeat']:
         config['mlp4'][0] = config['mlp4'][0] + config['num_classes']
 
-    # if config['classifier_only']:
-    #     config['mlp4'][0] = config['mlp4'][0] * len(config['year'])
+    if config['classifier_only']:
+        for fold in range(0, config['kfold']):
+            loader, dt[fold] = classif_only_loader(dt[fold], config['kfold'], fold, config)
+            print('Starting Fold {}'.format(fold + 1))
+            print('Train {}, Val {}, Test {}'.format(len(loader[0]), len(loader[1]), len(loader[2][0])))
+            model, model_config = model_definition(config, dt)
+            config['N_params'] = model.param_ratio()
+            with open(os.path.join(config['res_dir'], 'conf.json'), 'w') as file:
+                file.write(json.dumps(config, indent=4))
 
-    if not config['test_mode']:
+            model = model.to(device)
+            model.apply(weight_init)
+            optimizer = torch.optim.Adam(model.parameters())
+            criterion = FocalLoss(config['gamma'])
+
+            trainlog = {}
+
+            best_mIoU = 0
+            for epoch in range(1, config['epochs'] + 1):
+                print('EPOCH {}/{}'.format(epoch, config['epochs']))
+
+                model.train()
+                train_metrics = train_epoch(model, optimizer, criterion, loader[0], device=device, config=config)
+                print('Validation . . . ')
+                model.eval()
+                val_metrics = evaluation(model, criterion, loader[1], device=device, config=config, mode='val')
+
+                print(
+                    'Loss {:.4f},  Acc {:.2f},  IoU {:.4f}'.format(val_metrics['val_loss'], val_metrics['val_accuracy'],
+                                                                   val_metrics['val_IoU']))
+                trainlog[epoch] = {**train_metrics, **val_metrics}
+                checkpoint(fold + 1, trainlog, config)
+
+                if val_metrics['val_IoU'] >= best_mIoU:
+                    best_mIoU = val_metrics['val_IoU']
+                    torch.save({'epoch': epoch, 'state_dict': model.state_dict(),
+                                'optimizer': optimizer.state_dict()},
+                               os.path.join(config['res_dir'], 'Fold_{}'.format(fold + 1), 'model.pth.tar'))
+
+            print('Testing best epoch . . .')
+
+            for year, i in enumerate(loader[2]):
+                print("Année: {} ".format(config['year'][year]))
+
+                model_test, model_test_config = model_definition(config, dt, test=True, year=year)
+                path = config['res_dir']
+
+                test_metrics, conf_mat, config = test_model(model_test, i, config, device, path, fold + 1)
+
+                save_results(fold + 1, test_metrics, conf_mat, config, year)
+
+        for year in config['year']:
+            overall_performance_by_year(config, year)
+        overall_performance(config)
+
+
+
+
+
+    elif not config['test_mode']:
 
         loaders, dt = get_multi_years_loaders(dt, config['kfold'], config)
         for fold, (train_loader, val_loader, test_loader) in enumerate(loaders):
@@ -522,7 +653,6 @@ def main(config):
 
                 model.train()
                 train_metrics = train_epoch(model, optimizer, criterion, train_loader, device=device, config=config)
-
                 print('Validation . . . ')
                 model.eval()
                 val_metrics = evaluation(model, criterion, val_loader, device=device, config=config, mode='val')
@@ -530,7 +660,6 @@ def main(config):
                 print(
                     'Loss {:.4f},  Acc {:.2f},  IoU {:.4f}'.format(val_metrics['val_loss'], val_metrics['val_accuracy'],
                                                                    val_metrics['val_IoU']))
-
                 trainlog[epoch] = {**train_metrics, **val_metrics}
                 checkpoint(fold + 1, trainlog, config)
 
@@ -549,6 +678,7 @@ def main(config):
                 path = config['res_dir']
                 
                 test_metrics, conf_mat, config = test_model(model_test, i, config, device, path, fold+1)
+
                 save_results(fold + 1, test_metrics, conf_mat, config, year)
 
             # 1 fold (no cross validation)
@@ -558,15 +688,27 @@ def main(config):
         overall_performance(config)
 
     else:
-        loaders = get_test_loaders(dt, config['kfold'],config)
-        for fold, loader_fold in enumerate(loaders):
-            print("Fold: {} ".format(fold + 1))
-            for year, loader in enumerate(loader_fold):
-                print("Année: {} ".format(config['year'][year]))
-                model, model_config = model_definition(config, dt, test=True, year=year)
-                path = config['loaded_model']
-                test_metrics, conf_mat, config = test_model(model, loader, config, device, path, fold+1)
-                save_test_mode_results(test_metrics, conf_mat, config, config['year'][year], fold+1)
+        if config['save_embedding']:
+            loaders = get_embedding_loaders(dt, config)
+            for fold in range(config['kfold']):
+                print("Fold: {} ".format(fold + 1))
+                for year, loader in enumerate(loaders):
+                    print("Année: {} ".format(config['year'][year]))
+                    model, model_config = model_definition(config, dt, test=True, year=year)
+                    path = config['loaded_model']
+                    test_metrics, conf_mat, config = test_model(model, loader, config, device, path, fold+1)
+                    save_test_mode_results(test_metrics, conf_mat, config, config['year'][year], fold+1)
+
+        else:
+            loaders = get_test_loaders(dt, config['kfold'],config)
+            for fold, loader_fold in enumerate(loaders):
+                print("Fold: {} ".format(fold + 1))
+                for year, loader in enumerate(loader_fold):
+                    print("Année: {} ".format(config['year'][year]))
+                    model, model_config = model_definition(config, dt, test=True, year=year)
+                    path = config['loaded_model']
+                    test_metrics, conf_mat, config = test_model(model, loader, config, device, path, fold+1)
+                    save_test_mode_results(test_metrics, conf_mat, config, config['year'][year], fold+1)
         for year in config['year']:
             overall_performance_by_year(config, year)
         overall_performance(config)
@@ -580,11 +722,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     # Set-up parameters
-    parser.add_argument('--dataset_folder', default='/home/FQuinton/Bureau/data_pse', type=str,
+    parser.add_argument('--dataset_folder', default='/home/FQuinton/Bureau/data_embedding2', type=str,
                         help='Path to the folder where the results are saved.')
-    parser.add_argument('--year', default=['2020'], type=str,
+    parser.add_argument('--year', default=['2018','2019','2020'], type=str,
                         help='The year of the data you want to use')
-    parser.add_argument('--res_dir', default='./results/2020_on_2020', help='Path to the folder where the results should be stored')
+    parser.add_argument('--res_dir', default='./results/global_classif_only', help='Path to the folder where the results should be stored')
     parser.add_argument('--num_workers', default=8, type=int, help='Number of data loading workers')
     parser.add_argument('--rdm_seed', default=1, type=int, help='Random seed')
     parser.add_argument('--device', default='cuda', type=str,
@@ -596,21 +738,22 @@ if __name__ == '__main__':
     parser.set_defaults(preload=False)
 
     #Parameters relatives to test
-    parser.add_argument('--test_mode', default=True, type=bool,
+    parser.add_argument('--test_mode', default=False, type=bool,
                         help='Load a pre-trained model and test on the whole data set')
     parser.add_argument('--loaded_model',
-                        default='/home/FQuinton/Bureau/lightweight-temporal-attention-pytorch/models_saved/2018',
+                        default='/home/FQuinton/Bureau/lightweight-temporal-attention-pytorch/models_saved/global',
                         type=str,
                         help='Path to the pre-trained model')
     parser.add_argument('--save_pred', default=False, type=bool,
                         help='Save predictions by parcel during test')
-    parser.add_argument('--save_embedding', default=True, type=bool,
+    parser.add_argument('--save_embedding', default=False, type=bool,
                         help='Save embeddings by parcel during test')
-
+    parser.add_argument('--save_emb_dir', default='/home/FQuinton/Bureau/test',
+                        help='Path to the folder where the results should be stored')
 
     # Training parameters
     parser.add_argument('--kfold', default=5, type=int, help='Number of folds for cross validation')
-    parser.add_argument('--epochs', default=10, type=int, help='Number of epochs per fold')
+    parser.add_argument('--epochs', default=100, type=int, help='Number of epochs per fold')
     parser.add_argument('--batch_size', default=128, type=int, help='Batch size')
     parser.add_argument('--lr', default=0.001, type=float, help='Learning rate')
     parser.add_argument('--gamma', default=1, type=float, help='Gamma parameter of the focal loss')
@@ -632,7 +775,7 @@ if __name__ == '__main__':
     parser.add_argument('--T', default=1000, type=int, help='Maximum period for the positional encoding')
     parser.add_argument('--positions', default='bespoke', type=str,
                         help='Positions to use for the positional encoding (bespoke / order)')
-    parser.add_argument('--lms', default=29, type=int,
+    parser.add_argument('--lms', default=36, type=int,
                         help='Maximum sequence length for positional encoding (only necessary if positions == order)')
     parser.add_argument('--sly', default={'2018': 36, '2019': 27, '2020': 29},
                         help='Sequence length by year for positional encoding (only necessary if positions == order)')
@@ -647,7 +790,7 @@ if __name__ == '__main__':
     parser.add_argument('--tempfeat', default=False, type=bool,
                         help='If true the past years labels are used before classification PSE.')
     parser.add_argument('--num_classes', default=20, type=int, help='Number of classes')
-    parser.add_argument('--mlp4', default='[128, 64,32, 20]', type=str, help='Number of neurons in the layers of MLP4')
+    parser.add_argument('--mlp4', default='[128, 64, 32, 20]', type=str, help='Number of neurons in the layers of MLP4')
 
     ## Other methods (use one of the flags tae/gru/tcnn to train respectively a TAE, GRU or TempCNN instead of an L-TAE)
     ## see paper appendix for hyperparameters
@@ -659,7 +802,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--tcnn', dest='tcnn', action='store_true', help="Temporal Convolutions for temporal encoding")
     parser.add_argument('--nker', default='[32,32,128]', type=str, help="Number of successive convolutional kernels ")
-    parser.add_argument('--classifier_only', default=False, type=bool, help="Only train the classifier")
+    parser.add_argument('--classifier_only', default=True, type=bool, help="Only train the classifier")
 
     parser.set_defaults(gru=False, tcnn=False, tae=False)
 

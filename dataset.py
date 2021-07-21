@@ -97,6 +97,8 @@ class PixelSetData(data.Dataset):
     def __len__(self):
         return self.len
 
+
+
     def __getitem__(self, item):
         """
         Returns a Pixel-Set sequence tensor with its pixel mask and optional additional features.
@@ -164,13 +166,10 @@ class PixelSetData(data.Dataset):
             data['input'] = (data['input'], ef)
         if self.extra_feature_temp is not None:
             temp_feat = np.zeros(self.num_classes, dtype=int)
-            if(int(self.pid[item][-4:]) != 2018):
-                for i in self.years_list:
-                    shift = int(self.pid[item][-4:]) - int(i)
-                    # if i < self.pid[item][-4:]:
-                    if shift >= 1:
-                        # temp_feat[self.target[item - self.len * shift] + (self.num_classes * (shift - 1))] += 1
-                        temp_feat[self.target[item - self.len * shift]] += 1
+            for i in self.years_list:
+                shift = int(self.pid[item][-4:]) - int(i)
+                if shift >= 1:
+                    temp_feat[self.target[item - self.len * shift]] += 1
 
             data['temp_feat'] = temp_feat
         dates = self.date_positions[self.pid[item][-4:]]
@@ -179,26 +178,10 @@ class PixelSetData(data.Dataset):
             data['pid'] = self.pid[item]
         return data, torch.from_numpy(np.array(y, dtype=int))
 
-class PixelSetData_preloaded(PixelSetData):
-    """ Wrapper class to load all the dataset to RAM at initialization (when the hardware permits it).
-    """
-
-    def __init__(self, folder, labels, npixel, sub_classes=None, norm=None,
-                 extra_feature=None, jitter=(0.01, 0.05), return_id=False):
-        super(PixelSetData_preloaded, self).__init__(folder, labels, npixel, sub_classes=sub_classes, norm=norm,
-                 extra_feature=extra_feature, jitter=jitter, return_id=return_id)
-        self.samples = []
-        print('Loading samples to memory . . .')
-        for item in range(len(self)):
-            self.samples.append(super(PixelSetData_preloaded, self).__getitem__(item))
-        print('Done !')
-
-    def __getitem__(self, item):
-        return self.samples[item]
 
 class PixelSetData_classifier_only(data.Dataset):
-    def __init__(self, folder, labels, year=None, sub_classes=None, extra_feature_temp=None,return_id=False,
-                 num_classes=20, years_list=[]):
+    def __init__(self, folder, labels, year=None, sub_classes=None, return_id=False,
+                 num_classes=20, fold=None, years_list=[]):
         """
 
         Args:
@@ -216,14 +199,14 @@ class PixelSetData_classifier_only(data.Dataset):
 
         self.folder = folder
         self.year = year
-        self.data_folder = os.path.join(folder, 'DATA', year)
+        self.fold = fold + 1
+        self.data_folder = os.path.join(folder,  'DATA', 'Fold{}'.format(fold + 1), year)
         self.meta_folder = os.path.join(folder, 'META')
+
         self.labels = labels
-        self.extra_feature_temp = extra_feature_temp
         self.return_id = return_id
         self.num_classes = num_classes
         self.years_list = years_list
-
         l = [f for f in os.listdir(self.data_folder) if f.endswith('.npy')]
         self.pid = [str(f.split('.')[0]) + "_" + year for f in l]
         self.pid = list(np.sort(self.pid))
@@ -270,22 +253,51 @@ class PixelSetData_classifier_only(data.Dataset):
                 Extra-features : Sequence_length x Number of additional features
 
         """
-        x0 = np.load(os.path.join(self.folder, 'DATA', self.pid[item][-4:], '{}.npy'.format(self.pid[item][:-5])))[0:128]
+        x0 = np.load(os.path.join(self.data_folder, '{}.npy'.format(self.pid[item][:-5])))
         y = self.target[item]
-        data = {'input': Tensor(x0)}
 
-        if self.extra_feature_temp is not None:
-            temp_feat = np.zeros(self.num_classes, dtype=int)
-            if(int(self.pid[item][-4:]) != 2018):
-                for i in self.years_list:
-                    shift = int(self.pid[item][-4:]) - int(i)
-                    if shift >= 1:
-                        temp_feat[self.target[item - self.len * shift]] += 1
+        # rmv
+        x = x0
 
-            data['temp_feat'] = temp_feat
+
+        emb_feat = []
+
+        # for i in self.years_list:
+        #     shift = int(self.pid[item][-4:]) - int(i)
+        #     if shift >= 1:
+        #         emb_feat.append(np.load(os.path.join(self.data_folder[:-4], i, '{}.npy'.format(self.pid[item][:-5]))))
+        #
+        # if len(emb_feat) == 0:
+        #     emb_feat.append(np.zeros(np.size(x0)))
+        # if len(emb_feat) > 1:
+        #     emb_feat = np.mean(emb_feat, axis=0)
+        # x = np.concatenate((x0, emb_feat))
+        data = {'input': Tensor(x)}
+
+
         if self.return_id:
             data['pid'] = self.pid[item]
+
         return data, torch.from_numpy(np.array(y, dtype=int))
+
+
+class PixelSetData_preloaded(PixelSetData):
+    """ Wrapper class to load all the dataset to RAM at initialization (when the hardware permits it).
+    """
+
+    def __init__(self, folder, labels, npixel, sub_classes=None, norm=None,
+                 extra_feature=None, jitter=(0.01, 0.05), return_id=False):
+        super(PixelSetData_preloaded, self).__init__(folder, labels, npixel, sub_classes=sub_classes, norm=norm,
+                 extra_feature=extra_feature, jitter=jitter, return_id=return_id)
+        self.samples = []
+        print('Loading samples to memory . . .')
+        for item in range(len(self)):
+            self.samples.append(super(PixelSetData_preloaded, self).__getitem__(item))
+        print('Done !')
+
+    def __getitem__(self, item):
+        return self.samples[item]
+
 
 def parse(date):
     d = str(date)

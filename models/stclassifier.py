@@ -307,7 +307,7 @@ class ClassifierOnly(nn.Module):
         Pixel-Set encoder + GRU
         """
 
-    def __init__(self, mlp4=[128, 64, 32, 20], with_temp_feat=True):
+    def __init__(self, mlp4=[128, 64, 32, 20]):
         super(ClassifierOnly, self).__init__()
         self.decoder = get_decoder(mlp4)
 
