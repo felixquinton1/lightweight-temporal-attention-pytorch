@@ -42,15 +42,6 @@ class PixelSetEncoder(nn.Module):
 
         inter_dim = self.mlp1_dim[-1] * len(pooling.split('_'))
 
-        # if pos_enc_dim is not None:
-        #     assert pos_enc_mode in ['cat', 'add']
-        #     self.positional_encoder = PositionalEncoder(pos_enc_dim)
-        #     if pos_enc_mode == 'cat':
-        #         inter_dim += pos_enc_dim
-        #     self.pos_enc_mode = pos_enc_mode
-        # else:
-        #     self.positional_encoder = None
-
         if self.with_extra:
             self.name += 'Extra'
             inter_dim += self.extra_size
