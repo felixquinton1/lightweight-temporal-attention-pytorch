@@ -50,15 +50,6 @@ class TemporalAttentionEncoder(nn.Module):
         else:
             self.positional_encoder = None
 
-        # if positions is None:
-        #     positions = len_max_seq + 1
-        # else:
-        #     self.name += '_bespokePos'
-
-        # self.position_enc = nn.Embedding.from_pretrained(
-        #     get_sinusoid_encoding_table(positions, self.in_channels, T=T),
-        #     freeze=True)
-
         self.inlayernorm = nn.LayerNorm(self.in_channels)
 
         if d_model is not None:
@@ -92,12 +83,6 @@ class TemporalAttentionEncoder(nn.Module):
         sz_b, seq_len, d = x.shape
 
         x = self.inlayernorm(x)
-
-        # if self.positions is None:
-        #     src_pos = torch.arange(1, seq_len + 1, dtype=torch.long).expand(sz_b, seq_len).to(x.device)
-        # else:
-        #     src_pos = torch.arange(0, seq_len, dtype=torch.long).expand(sz_b, seq_len).to(x.device)
-        # enc_output = x + self.position_enc(src_pos)
 
         if self.inconv is not None:
             x = self.inconv(x.permute(0, 2, 1)).permute(0, 2, 1)
