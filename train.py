@@ -1,8 +1,7 @@
 import torch
-import torch.utils.data as data
 import torchnet as tnt
 import numpy as np
-from sklearn.model_selection import KFold
+
 from sklearn.metrics import confusion_matrix
 import os
 import json
@@ -11,14 +10,15 @@ import argparse
 import pprint
 from tqdm import tqdm
 from models.stclassifier import PseTae, PseLTae, PseGru, PseTempCNN, ClassifierOnly
+from learning.loader import get_test_loaders, get_embedding_loaders, classif_only_loader, get_multi_years_loaders
+from learning.output import prepare_output, checkpoint, save_pred, save_embedding, save_results, save_test_mode_results,\
+    overall_performance_by_year, overall_performance
 from dataset import PixelSetData, PixelSetData_preloaded, PixelSetData_classifier_only
+
 from learning.focal_loss import FocalLoss
 from learning.weight_init import weight_init
-from learning.metrics import mIou, confusion_matrix_analysis
+from learning.metrics import mIou
 
-import re
-import collections.abc
-from torch.nn import functional as F
 
 
 def train_epoch(model, optimizer, criterion, data_loader, device, config):
@@ -104,251 +104,6 @@ def evaluation(model, criterion, loader, device, config, mode='val', fold=None):
         return metrics, confusion_matrix(y_true, y_pred, labels=list(range(config['num_classes'])))
 
 
-np_str_obj_array_pattern = re.compile(r'[SaUO]')
-
-
-def pad_tensor(x, l, pad_value=0):
-    padlen = l - x.shape[0]
-    pad = [0 for _ in range(2 * len(x.shape[1:]))] + [0, padlen]
-    return F.pad(x, pad=pad, value=pad_value)
-
-
-def pad_collate(batch):
-    # modified default_collate from the official pytorch repo
-    # https://github.com/pytorch/pytorch/blob/master/torch/utils/data/_utils/collate.py
-    elem = batch[0]
-    elem_type = type(elem)
-    if isinstance(elem, torch.Tensor):
-        out = None
-        if len(elem.shape) > 0:
-            sizes = [e.shape[0] for e in batch]
-            m = max(sizes)
-            if not all(s == m for s in sizes):
-                # pad tensors which have a temporal dimension
-                batch = [pad_tensor(e, m) for e in batch]
-        if torch.utils.data.get_worker_info() is not None:
-            # If we're in a background process, concatenate directly into a
-            # shared memory tensor to avoid an extra copy
-            numel = sum([x.numel() for x in batch])
-            storage = elem.storage()._new_shared(numel)
-            out = elem.new(storage)
-        return torch.stack(batch, 0, out=out)
-    elif elem_type.__name__ == 'str':
-        return batch
-    elif elem_type.__module__ == 'numpy' and elem_type.__name__ != 'str_' \
-            and elem_type.__name__ != 'string_':
-        if elem_type.__name__ == 'ndarray' or elem_type.__name__ == 'memmap':
-            # array of string classes and object
-            if np_str_obj_array_pattern.search(elem.dtype.str) is not None:
-                raise TypeError('Format not managed : {}'.format(elem.dtype))
-            return pad_collate([torch.as_tensor(b) for b in batch])
-        elif elem.shape == ():  # scalars
-            return torch.as_tensor(batch)
-    elif isinstance(elem, collections.abc.Mapping):
-        return {key: pad_collate([d[key] for d in batch]) for key in elem}
-    elif isinstance(elem, tuple) and hasattr(elem, '_fields'):  # namedtuple
-        return elem_type(*(pad_collate(samples) for samples in zip(*batch)))
-    elif isinstance(elem, collections.abc.Sequence):
-        # check to make sure that the elements in batch have consistent size
-        it = iter(batch)
-        elem_size = len(next(it))
-        if not all(len(elem) == elem_size for elem in it):
-            raise RuntimeError('each element in list of batch should be of equal size')
-        transposed = zip(*batch)
-        return [pad_collate(samples) for samples in transposed]
-
-    raise TypeError('Format not managed : {}'.format(elem_type))
-
-
-
-
-def get_loaders(dt, kfold, config):
-    indices = list(range(len(dt)))
-    np.random.shuffle(indices)
-
-    kf = KFold(n_splits=kfold, shuffle=False)
-    indices_seq = list(kf.split(list(range(len(dt)))))
-    ntest = len(indices_seq[0][1])
-
-    loader_seq = []
-    for trainval, test_indices in indices_seq:
-        trainval = [indices[i] for i in trainval]
-        test_indices = [indices[i] for i in test_indices]
-
-        validation_indices = trainval[-ntest:]
-        train_indices = trainval[:-ntest]
-
-        train_sampler = data.sampler.SubsetRandomSampler(train_indices)
-        validation_sampler = data.sampler.SubsetRandomSampler(validation_indices)
-        test_sampler = data.sampler.SubsetRandomSampler(test_indices)
-
-        train_loader = data.DataLoader(dt, batch_size=config['batch_size'],
-                                       sampler=train_sampler,
-                                       num_workers=config['num_workers'], drop_last=True)
-        validation_loader = data.DataLoader(dt, batch_size=config['batch_size'],
-                                            sampler=validation_sampler,
-                                            num_workers=config['num_workers'], drop_last=True)
-        test_loader = data.DataLoader(dt, batch_size=config['batch_size'],
-                                      sampler=test_sampler,
-                                      num_workers=config['num_workers'], drop_last=True)
-
-        loader_seq.append((train_loader, validation_loader, test_loader))
-    return loader_seq
-
-def get_test_loaders(dt,kfold,config):
-
-    indices = [np.array(range(i * len(dt[i]), (i + 1) * len(dt[i]))) for i in range(len(dt))]
-    np.random.shuffle(indices[0])
-    if len(indices) > 1:
-        for i in range(1, len(indices)):
-            indices[i] = np.array(indices[0]) + len(indices[0]) * i
-
-    kf = KFold(n_splits=kfold, shuffle=False)
-    indices_seq = [list(kf.split(list(range(len(i))))) for i in dt]
-
-    test_loader = [[] for i in range(kfold)]
-    merged_dt = dt[0]
-
-    for i in range(1, len(dt)):
-        merged_dt.date_positions.update(dt[i].date_positions)
-        merged_dt.pid += dt[i].pid
-        merged_dt.target += dt[i].target
-
-    for idx, dataset in enumerate(dt):
-        for id_fold, (_, test_indices) in enumerate(indices_seq[idx]):
-            test_indices = [indices[idx][i] for i in test_indices]
-
-            test_sampler = data.sampler.SubsetRandomSampler(test_indices)
-
-            test_loader[id_fold].append(data.DataLoader(merged_dt, batch_size=config['batch_size'],
-                                                        sampler=test_sampler,
-                                                        num_workers=config['num_workers'],
-                                                        collate_fn=pad_collate))
-    return test_loader
-
-def get_embedding_loaders(dt,kfold,fold, config):
-
-    indices = [np.array(range(i * len(dt[i]), (i + 1) * len(dt[i]))) for i in range(len(dt))]
-    np.random.shuffle(indices[0])
-    if len(indices) > 1:
-        for i in range(1, len(indices)):
-            indices[i] = np.array(indices[0]) + len(indices[0]) * i
-
-    test_loader = []
-    merged_dt = dt[0]
-
-    for i in range(1, len(dt)):
-        merged_dt.date_positions.update(dt[i].date_positions)
-        merged_dt.pid += dt[i].pid
-        merged_dt.target += dt[i].target
-
-    for idx, dataset in enumerate(dt):
-        test_indices = indices[idx]
-
-        test_sampler = data.sampler.SubsetRandomSampler(test_indices)
-
-        test_loader.append(data.DataLoader(merged_dt, batch_size=config['batch_size'],
-                                                    sampler=test_sampler,
-                                                    num_workers=config['num_workers'],
-                                                    collate_fn=pad_collate))
-    return test_loader
-
-def classif_only_loader(dt,kfold, fold, config):
-    indices = [np.array(range(i * len(dt[i]), (i + 1) * len(dt[i]))) for i in range(len(dt))]
-    np.random.shuffle(indices[0])
-
-    kf = KFold(n_splits=kfold, shuffle=False)
-    indices_seq = [list(kf.split(list(range(len(i)))))[fold] for i in dt]
-    ntest = len(indices_seq[0][1])
-
-    loader_seq = []
-    test_loader = []
-    validation_indices = []
-    train_indices = []
-    merged_dt = dt[0]
-    for i in range(1, len(dt)):
-        merged_dt.pid += dt[i].pid
-        merged_dt.target += dt[i].target
-
-    for idx, dataset in enumerate(dt):
-        trainval = indices_seq[idx][0]
-        test_indices = indices_seq[idx][1]
-        trainval = [indices[idx][i] for i in trainval]
-        test_indices = [indices[idx][i] for i in test_indices]
-
-        test_sampler = data.sampler.SubsetRandomSampler(test_indices)
-
-        test_loader.append(data.DataLoader(merged_dt, batch_size=config['batch_size'],
-                                                    sampler=test_sampler,
-                                                    num_workers=config['num_workers'],
-                                                    collate_fn=pad_collate))
-        validation_indices += trainval[-ntest:]
-        train_indices += trainval[:-ntest]
-    train_sampler = data.sampler.SubsetRandomSampler(train_indices)
-    validation_sampler = data.sampler.SubsetRandomSampler(validation_indices)
-
-    train_loader = data.DataLoader(merged_dt, batch_size=config['batch_size'],
-                                   sampler=train_sampler,
-                                   num_workers=config['num_workers'], collate_fn=pad_collate)
-    validation_loader = data.DataLoader(merged_dt, batch_size=config['batch_size'],
-                                        sampler=validation_sampler,
-                                        num_workers=config['num_workers'], collate_fn=pad_collate)
-
-    loader_seq.append(train_loader)
-    loader_seq.append(validation_loader)
-    loader_seq.append(test_loader)
-    return loader_seq, merged_dt
-
-
-
-def get_multi_years_loaders(dt, kfold, config):
-    indices = [np.array(range(i * len(dt[i]), (i + 1) * len(dt[i]))) for i in range(len(dt))]
-    np.random.shuffle(indices[0])
-    if len(indices) > 1:
-        for i in range(1, len(indices)):
-            indices[i] = np.array(indices[0]) + len(indices[0]) * i
-
-    kf = KFold(n_splits=kfold, shuffle=False)
-    indices_seq = [list(kf.split(list(range(len(i))))) for i in dt]
-    ntest = len(indices_seq[0][0][1])
-
-    loader_seq = []
-    test_loader = [[] for i in range(kfold)]
-    validation_indices = [[] for i in range(kfold)]
-    train_indices = [[] for i in range(kfold)]
-    merged_dt = dt[0]
-    for i in range(1, len(dt)):
-        merged_dt.date_positions.update(dt[i].date_positions)
-        merged_dt.pid += dt[i].pid
-        merged_dt.target += dt[i].target
-
-    for idx, dataset in enumerate(dt):
-        for id_fold, (trainval, test_indices) in enumerate(indices_seq[idx]):
-            trainval = [indices[idx][i] for i in trainval]
-            test_indices = [indices[idx][i] for i in test_indices]
-
-            test_sampler = data.sampler.SubsetRandomSampler(test_indices)
-
-            test_loader[id_fold].append(data.DataLoader(merged_dt, batch_size=config['batch_size'],
-                                                        sampler=test_sampler,
-                                                        num_workers=config['num_workers'],
-                                                        collate_fn=pad_collate))
-            validation_indices[id_fold] += trainval[-ntest:]
-            train_indices[id_fold] += trainval[:-ntest]
-    for i in range(kfold):
-        train_sampler = data.sampler.SubsetRandomSampler(train_indices[i])
-        validation_sampler = data.sampler.SubsetRandomSampler(validation_indices[i])
-
-        train_loader = data.DataLoader(merged_dt, batch_size=config['batch_size'],
-                                       sampler=train_sampler,
-                                       num_workers=config['num_workers'], collate_fn=pad_collate)
-        validation_loader = data.DataLoader(merged_dt, batch_size=config['batch_size'],
-                                            sampler=validation_sampler,
-                                            num_workers=config['num_workers'], collate_fn=pad_collate)
-
-        loader_seq.append((train_loader, validation_loader, test_loader[i]))
-    return loader_seq, merged_dt
-
 
 def recursive_todevice(x, device):
     if type(x).__name__ == 'str':
@@ -361,94 +116,7 @@ def recursive_todevice(x, device):
         return [recursive_todevice(c, device) for c in x]
 
 
-def prepare_output(config):
-    os.makedirs(config['res_dir'], exist_ok=True)
 
-    for fold in range(1, config['kfold'] + 1):
-        if not config['test_mode']:
-            for year in config['year']:
-                os.makedirs(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), year), exist_ok=True)
-        os.makedirs(os.path.join(config['res_dir'],'Fold_{}'.format(fold)), exist_ok=True)
-        if (config['save_embedding']):
-            with open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), 'embedding_by_parcel.json'), 'w') as file:
-                file.write(json.dumps({}))
-
-        if (config['save_pred']):
-            with open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), 'pred_by_parcel.json'), 'w') as file:
-                file.write(json.dumps({}))
-
-    for fold in range(1, config['kfold'] + 1):
-        if (config['save_embedding']):
-            for year in config['sly'].keys():
-                os.makedirs(os.path.join(config['save_emb_dir'], 'Fold{}'.format(fold), year), exist_ok=True)
-
-
-    os.makedirs(os.path.join(config['res_dir'], 'overall'), exist_ok=True)
-
-
-def checkpoint(fold, log, config):
-    with open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), 'trainlog.json'), 'w') as outfile:
-        json.dump(log, outfile, indent=4)
-
-def save_pred(pred, fold, config):
-    with open(os.path.join(config['res_dir'],'Fold_{}'.format(fold), 'pred_by_parcel.json'), 'r') as outfile:
-        prediction = json.load(outfile)
-        prediction.update(pred)
-        with open(os.path.join(config['res_dir'],'Fold_{}'.format(fold), 'pred_by_parcel.json'),
-                  'w') as file:
-            file.write(json.dumps(prediction, indent=4))
-
-def save_embedding(emb, key, fold, config):
-    np.save(os.path.join(config['save_emb_dir'], 'Fold{}'.format(fold), key[-4:], key[:-5]), emb)
-
-
-
-def save_results(fold, metrics, conf_mat, config, year):
-    with open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), config['year'][year], 'test_metrics.json'), 'w') \
-            as outfile:
-        json.dump(metrics, outfile, indent=4)
-    pkl.dump(conf_mat, open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), config['year'][year], 'conf_mat.pkl'
-                                         ), 'wb'))
-
-
-def save_test_mode_results(metrics, conf_mat, config, year, fold):
-    with open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), year + '_test_metrics.json'), 'w') \
-            as outfile:
-        json.dump(metrics, outfile, indent=4)
-    pkl.dump(conf_mat, open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), year + '_conf_mat.pkl'
-                                         ), 'wb'))
-
-
-def overall_performance_by_year(config, year):
-    cm = np.zeros((config['num_classes'], config['num_classes']))
-    for fold in range(1, config['kfold'] + 1):
-        if not config['test_mode']:
-            cm += pkl.load(open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), year, 'conf_mat.pkl'), 'rb'))
-        else:
-            cm += pkl.load(open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), year + '_conf_mat.pkl'), 'rb'))
-
-    _, perf = confusion_matrix_analysis(cm)
-
-    print('Overall performance in:' + year)
-    print('Acc: {},  IoU: {}'.format(perf['Accuracy'], perf['MACRO_IoU']))
-
-    pkl.dump(cm.astype(int), open(os.path.join(config['res_dir'], 'overall', year + '_conf_mat.pkl'), 'wb'))
-    with open(os.path.join(config['res_dir'], 'overall', year + '_overall.json'), 'w') as file:
-        file.write(json.dumps(perf, indent=4))
-
-def overall_performance(config):
-    cm = np.zeros((config['num_classes'], config['num_classes']))
-    for year in config['year']:
-        cm += pkl.load(open(os.path.join(config['res_dir'], 'overall', year + '_conf_mat.pkl'), 'rb'))
-
-    _, perf = confusion_matrix_analysis(cm)
-
-    print('Overall performance:')
-    print('Acc: {},  IoU: {}'.format(perf['Accuracy'], perf['MACRO_IoU']))
-
-    pkl.dump(cm.astype(int), open(os.path.join(config['res_dir'],'overall', 'conf_mat.pkl'), 'wb'))
-    with open(os.path.join(config['res_dir'], 'overall', 'overall.json'), 'w') as file:
-        file.write(json.dumps(perf, indent=4))
 
 def model_definition(config, dt, test=False, year=None):
     if test:
@@ -537,6 +205,7 @@ def main(config):
     mean_std = pkl.load(open(config['dataset_folder'] + '/normvals_tot.pkl', 'rb'))
     extra = 'geomfeat' if config['geomfeat'] else None
     extra_temp = 'tempfeat' if config['tempfeat'] else None
+
     # We only consider the subset of classes with more than 100 samples in the S2-Agri dataset
     # subset = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
     subset = None
@@ -551,6 +220,7 @@ def main(config):
         dt = [[] for fold in range(config['kfold'])]
         for fold in range(0, config['kfold']):
             for year in config['year']:
+
                 dt[fold].append(PixelSetData_classifier_only(config['dataset_folder'], labels='CODE9_' + year,
                                                              sub_classes=subset, year=year, years_list=config['year'],
                                                              num_classes=config['num_classes'], fold=fold,
@@ -572,6 +242,8 @@ def main(config):
 
     if config['classifier_only']:
         for fold in range(0, config['kfold']):
+            np.random.seed(config['rdm_seed'])
+            torch.manual_seed(config['rdm_seed'])
             loader, dt[fold] = classif_only_loader(dt[fold], config['kfold'], fold, config)
             print('Starting Fold {}'.format(fold + 1))
             print('Train {}, Val {}, Test {}'.format(len(loader[0]), len(loader[1]), len(loader[2][0])))
@@ -726,7 +398,7 @@ if __name__ == '__main__':
                         help='Path to the folder where the results are saved.')
     parser.add_argument('--year', default=['2018','2019','2020'], type=str,
                         help='The year of the data you want to use')
-    parser.add_argument('--res_dir', default='./results/global_classif_only', help='Path to the folder where the results should be stored')
+    parser.add_argument('--res_dir', default='./results/global_embedding', help='Path to the folder where the results should be stored')
     parser.add_argument('--num_workers', default=8, type=int, help='Number of data loading workers')
     parser.add_argument('--rdm_seed', default=1, type=int, help='Random seed')
     parser.add_argument('--device', default='cuda', type=str,
@@ -753,7 +425,7 @@ if __name__ == '__main__':
 
     # Training parameters
     parser.add_argument('--kfold', default=5, type=int, help='Number of folds for cross validation')
-    parser.add_argument('--epochs', default=100, type=int, help='Number of epochs per fold')
+    parser.add_argument('--epochs', default=30, type=int, help='Number of epochs per fold')
     parser.add_argument('--batch_size', default=128, type=int, help='Batch size')
     parser.add_argument('--lr', default=0.001, type=float, help='Learning rate')
     parser.add_argument('--gamma', default=1, type=float, help='Gamma parameter of the focal loss')
@@ -790,7 +462,7 @@ if __name__ == '__main__':
     parser.add_argument('--tempfeat', default=False, type=bool,
                         help='If true the past years labels are used before classification PSE.')
     parser.add_argument('--num_classes', default=20, type=int, help='Number of classes')
-    parser.add_argument('--mlp4', default='[128, 64, 32, 20]', type=str, help='Number of neurons in the layers of MLP4')
+    parser.add_argument('--mlp4', default='[256, 128, 64, 20]', type=str, help='Number of neurons in the layers of MLP4')
 
     ## Other methods (use one of the flags tae/gru/tcnn to train respectively a TAE, GRU or TempCNN instead of an L-TAE)
     ## see paper appendix for hyperparameters

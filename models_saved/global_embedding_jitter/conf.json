@@ -5,7 +5,7 @@
         "2019",
         "2020"
     ],
-    "res_dir": "./results/global_embedding",
+    "res_dir": "./results/global_embedding_jitter",
     "num_workers": 8,
     "rdm_seed": 1,
     "device": "cuda",

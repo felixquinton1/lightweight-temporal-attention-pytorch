@@ -181,7 +181,7 @@ class PixelSetData(data.Dataset):
 
 class PixelSetData_classifier_only(data.Dataset):
     def __init__(self, folder, labels, year=None, sub_classes=None, return_id=False,
-                 num_classes=20, fold=None, years_list=[]):
+                 num_classes=20, fold=None, jitter=(0.01, 0.05), years_list=[]):
         """
 
         Args:
@@ -200,14 +200,14 @@ class PixelSetData_classifier_only(data.Dataset):
         self.folder = folder
         self.year = year
         self.fold = fold + 1
-        self.data_folder = os.path.join(folder,  'DATA', 'Fold{}'.format(fold + 1), year)
+        self.data_folder = os.path.join(folder,  'DATA', 'Fold{}'.format(fold + 1))
         self.meta_folder = os.path.join(folder, 'META')
-
+        self.jitter = jitter
         self.labels = labels
         self.return_id = return_id
         self.num_classes = num_classes
         self.years_list = years_list
-        l = [f for f in os.listdir(self.data_folder) if f.endswith('.npy')]
+        l = [f for f in os.listdir(os.path.join(self.data_folder,self.year)) if f.endswith('.npy')]
         self.pid = [str(f.split('.')[0]) + "_" + year for f in l]
         self.pid = list(np.sort(self.pid))
 
@@ -253,27 +253,30 @@ class PixelSetData_classifier_only(data.Dataset):
                 Extra-features : Sequence_length x Number of additional features
 
         """
-        x0 = np.load(os.path.join(self.data_folder, '{}.npy'.format(self.pid[item][:-5])))
+        x0 = np.load(os.path.join(self.data_folder, self.pid[item][-4:], '{}.npy'.format(self.pid[item][:-5])))
         y = self.target[item]
-
-        # rmv
-        x = x0
 
 
         emb_feat = []
 
-        # for i in self.years_list:
-        #     shift = int(self.pid[item][-4:]) - int(i)
-        #     if shift >= 1:
-        #         emb_feat.append(np.load(os.path.join(self.data_folder[:-4], i, '{}.npy'.format(self.pid[item][:-5]))))
-        #
-        # if len(emb_feat) == 0:
-        #     emb_feat.append(np.zeros(np.size(x0)))
-        # if len(emb_feat) > 1:
-        #     emb_feat = np.mean(emb_feat, axis=0)
-        # x = np.concatenate((x0, emb_feat))
-        data = {'input': Tensor(x)}
+        for i in self.years_list:
+            shift = int(self.pid[item][-4:]) - int(i)
+            if shift >= 1:
+                emb_feat.append(np.load(os.path.join(self.data_folder, i, '{}.npy'.format(self.pid[item][:-5]))))
 
+        if len(emb_feat) == 0:
+            emb_feat = np.zeros(np.size(x0))
+        elif len(emb_feat) == 1:
+            emb_feat = emb_feat[0]
+        else:
+            emb_feat = np.mean(emb_feat, axis=0)
+        x = np.concatenate((x0, emb_feat))
+
+        # if self.jitter is not None:
+        #     sigma, clip = self.jitter
+        #     x = x + np.clip(sigma * np.random.randn(*x.shape), -1 * clip, clip)
+
+        data = {'input': Tensor(x)}
 
         if self.return_id:
             data['pid'] = self.pid[item]
