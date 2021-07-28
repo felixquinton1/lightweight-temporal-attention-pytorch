@@ -25,6 +25,9 @@ def prepare_output(config):
         if config['save_embedding']:
             for year in config['sly'].keys():
                 os.makedirs(os.path.join(config['save_emb_dir'], 'Fold{}'.format(fold), year), exist_ok=True)
+    if config['save_pred']:
+        for year in config['sly'].keys():
+            os.makedirs(os.path.join(config['save_pred_dir'], year), exist_ok=True)
 
     os.makedirs(os.path.join(config['res_dir'], 'overall'), exist_ok=True)
 
@@ -34,14 +37,8 @@ def checkpoint(fold, log, config):
         json.dump(log, outfile, indent=4)
 
 
-def save_pred(pred, fold, config):
-    with open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), 'pred_by_parcel.json'), 'r') as outfile:
-        prediction = json.load(outfile)
-        prediction.update(pred)
-        with open(os.path.join(config['res_dir'], 'Fold_{}'.format(fold), 'pred_by_parcel.json'),
-                  'w') as file:
-            file.write(json.dumps(prediction, indent=4))
-
+def save_pred(pred, key, config):
+    np.save(os.path.join(config['save_pred_dir'], key[-4:], key[:-5]), pred)
 
 def save_embedding(emb, key, fold, config):
     np.save(os.path.join(config['save_emb_dir'], 'Fold{}'.format(fold), key[-4:], key[:-5]), emb)

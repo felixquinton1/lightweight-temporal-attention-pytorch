@@ -28,4 +28,4 @@ with open(labels) as f:
             c = data['CODE9_2020'][key]
             mtot[a][b][c] += 1
 
-pass
+np.save('/home/FQuinton/Bureau/data_pse/META/transition_matrix.npy', mtot)

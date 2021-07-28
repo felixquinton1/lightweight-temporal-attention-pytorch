@@ -63,8 +63,6 @@ def evaluation(model, criterion, loader, device, config, mode='val', fold=None):
 
     acc_meter = tnt.meter.ClassErrorMeter(accuracy=True)
     loss_meter = tnt.meter.AverageValueMeter()
-    pred = {}
-    emb = {}
     for (data, y) in tqdm(loader):
         y_true.extend(list(map(int, y)))
         x = recursive_todevice(data, device)
@@ -81,8 +79,8 @@ def evaluation(model, criterion, loader, device, config, mode='val', fold=None):
             if (config['save_pred']):
                 for i, id in enumerate(data['pid']):
                     exp_pred = torch.exp(prediction[i])
-                    pred[id] = torch.div(exp_pred, torch.sum(exp_pred)).tolist()
-
+                    pred = torch.div(exp_pred, torch.sum(exp_pred)).tolist()
+                    save_pred(pred, id, config)
             loss = criterion(prediction, y)
 
         acc_meter.add(prediction, y)
@@ -98,9 +96,6 @@ def evaluation(model, criterion, loader, device, config, mode='val', fold=None):
         return metrics
 
     if mode == 'test':
-        if config['save_pred'] :
-            save_pred(pred, fold, config)
-
         return metrics, confusion_matrix(y_true, y_pred, labels=list(range(config['num_classes'])))
 
 
@@ -394,11 +389,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     # Set-up parameters
-    parser.add_argument('--dataset_folder', default='/home/FQuinton/Bureau/data_embedding2', type=str,
+    parser.add_argument('--dataset_folder', default='/home/FQuinton/Bureau/data_pse', type=str,
                         help='Path to the folder where the results are saved.')
-    parser.add_argument('--year', default=['2018','2019','2020'], type=str,
+    parser.add_argument('--year', default=['2018', '2019', '2020'], type=str,
                         help='The year of the data you want to use')
-    parser.add_argument('--res_dir', default='./results/global_embedding', help='Path to the folder where the results should be stored')
+    parser.add_argument('--res_dir', default='./results/global_pred', help='Path to the folder where the results should be stored')
     parser.add_argument('--num_workers', default=8, type=int, help='Number of data loading workers')
     parser.add_argument('--rdm_seed', default=1, type=int, help='Random seed')
     parser.add_argument('--device', default='cuda', type=str,
@@ -410,17 +405,19 @@ if __name__ == '__main__':
     parser.set_defaults(preload=False)
 
     #Parameters relatives to test
-    parser.add_argument('--test_mode', default=False, type=bool,
+    parser.add_argument('--test_mode', default=True, type=bool,
                         help='Load a pre-trained model and test on the whole data set')
     parser.add_argument('--loaded_model',
                         default='/home/FQuinton/Bureau/lightweight-temporal-attention-pytorch/models_saved/global',
                         type=str,
                         help='Path to the pre-trained model')
-    parser.add_argument('--save_pred', default=False, type=bool,
+    parser.add_argument('--save_pred', default=True, type=bool,
                         help='Save predictions by parcel during test')
+    parser.add_argument('--save_pred_dir', default='/home/FQuinton/Bureau/data_pred_global',
+                        help='Path to the folder where the results should be stored')
     parser.add_argument('--save_embedding', default=False, type=bool,
                         help='Save embeddings by parcel during test')
-    parser.add_argument('--save_emb_dir', default='/home/FQuinton/Bureau/test',
+    parser.add_argument('--save_emb_dir', default='/home/FQuinton/Bureau/data_embedding_labels_0_padding',
                         help='Path to the folder where the results should be stored')
 
     # Training parameters
@@ -462,7 +459,7 @@ if __name__ == '__main__':
     parser.add_argument('--tempfeat', default=False, type=bool,
                         help='If true the past years labels are used before classification PSE.')
     parser.add_argument('--num_classes', default=20, type=int, help='Number of classes')
-    parser.add_argument('--mlp4', default='[256, 128, 64, 20]', type=str, help='Number of neurons in the layers of MLP4')
+    parser.add_argument('--mlp4', default='[128, 64, 32, 20]', type=str, help='Number of neurons in the layers of MLP4')
 
     ## Other methods (use one of the flags tae/gru/tcnn to train respectively a TAE, GRU or TempCNN instead of an L-TAE)
     ## see paper appendix for hyperparameters
@@ -474,7 +471,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--tcnn', dest='tcnn', action='store_true', help="Temporal Convolutions for temporal encoding")
     parser.add_argument('--nker', default='[32,32,128]', type=str, help="Number of successive convolutional kernels ")
-    parser.add_argument('--classifier_only', default=True, type=bool, help="Only train the classifier")
+    parser.add_argument('--classifier_only', default=False, type=bool, help="Only train the classifier")
 
     parser.set_defaults(gru=False, tcnn=False, tae=False)
 
