@@ -50,6 +50,10 @@ def get_test_loaders(dt,kfold,config):
     kf = KFold(n_splits=kfold, shuffle=False)
     indices_seq = [list(kf.split(list(range(len(i))))) for i in dt]
 
+    ntest = len(indices_seq[0][0][1])
+    loader_seq = []
+    validation_indices = [[] for i in range(kfold)]
+
     test_loader = [[] for i in range(kfold)]
     merged_dt = dt[0]
 
@@ -59,7 +63,8 @@ def get_test_loaders(dt,kfold,config):
         merged_dt.target += dt[i].target
 
     for idx, dataset in enumerate(dt):
-        for id_fold, (_, test_indices) in enumerate(indices_seq[idx]):
+        for id_fold, (trainval, test_indices) in enumerate(indices_seq[idx]):
+            trainval = [indices[idx][i] for i in trainval]
             test_indices = [indices[idx][i] for i in test_indices]
 
             test_sampler = data.sampler.SubsetRandomSampler(test_indices)
@@ -68,7 +73,14 @@ def get_test_loaders(dt,kfold,config):
                                                         sampler=test_sampler,
                                                         num_workers=config['num_workers'],
                                                         collate_fn=pad_collate))
-    return test_loader
+            validation_indices[id_fold] += trainval[-ntest:]
+    for i in range(kfold):
+        validation_sampler = data.sampler.SubsetRandomSampler(validation_indices[i])
+        validation_loader = data.DataLoader(merged_dt, batch_size=config['batch_size'],
+                                            sampler=validation_sampler,
+                                            num_workers=config['num_workers'], collate_fn=pad_collate)
+        loader_seq.append((validation_loader, test_loader[i]))
+    return loader_seq
 
 def get_embedding_loaders(dt,config):
 
@@ -214,9 +226,9 @@ def pad_collate(batch):
         if len(elem.shape) > 0:
             sizes = [e.shape[0] for e in batch]
             m = max(sizes)
-            if not all(s == m for s in sizes):
+            # if not all(s == m for s in sizes):
                 # pad tensors which have a temporal dimension
-                batch = [pad_tensor(e, m) for e in batch]
+            batch = [pad_tensor(e, 36) for e in batch]
         if torch.utils.data.get_worker_info() is not None:
             # If we're in a background process, concatenate directly into a
             # shared memory tensor to avoid an extra copy

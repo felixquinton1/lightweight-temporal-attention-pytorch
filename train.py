@@ -19,7 +19,7 @@ from learning.focal_loss import FocalLoss
 from learning.weight_init import weight_init
 from learning.metrics import mIou
 
-
+from learning.temperature_scaling import ModelWithTemperature
 
 def train_epoch(model, optimizer, criterion, data_loader, device, config):
     acc_meter = tnt.meter.ClassErrorMeter(accuracy=True)
@@ -172,19 +172,15 @@ def model_definition(config, dt, test=False, year=None):
 
 def test_model(model, loader, config, device, path ,fold):
 
-    config['N_params'] = model.param_ratio()
-    with open(os.path.join('conf.json'), 'w') as file:
-        file.write(json.dumps(config, indent=4))
-    model = model.to(device)
-    model.apply(weight_init)
+
+    # new_state_dict = torch.load(os.path.join(path,'Fold_{}'.format(fold), 'model.pth.tar'))
+    # model_dict = {k: v for k, v in model.state_dict().items() if k != 'temporal_encoder.position_enc.weight'}
+    # model_dict_copy = {k: v for k, v in model.state_dict().items()}
+    # compatible_dict = {k: v for k, v in new_state_dict['state_dict'].items() if k in model_dict}
+    # model_dict_copy.update(compatible_dict)
+    # model.load_state_dict(model_dict_copy)
+
     criterion = FocalLoss(config['gamma'])
-    new_state_dict = torch.load(os.path.join(path,'Fold_{}'.format(fold), 'model.pth.tar'))
-    model_dict = {k: v for k, v in model.state_dict().items() if k != 'temporal_encoder.position_enc.weight'}
-    model_dict_copy = {k: v for k, v in model.state_dict().items()}
-    compatible_dict = {k: v for k, v in new_state_dict['state_dict'].items() if k in model_dict}
-    model_dict_copy.update(compatible_dict)
-    model.load_state_dict(model_dict_copy)
-    model.eval()
     test_metrics, conf_mat = evaluation(model, criterion, loader, device=device, mode='test', config=config, fold=fold)
     
     print('Loss {:.4f},  Acc {:.2f},  IoU {:.4f}'.format(test_metrics['test_loss'], test_metrics['test_accuracy'],
@@ -343,7 +339,7 @@ def main(config):
 
                 model_test, model_test_config = model_definition(config, dt, test=True, year=year)
                 path = config['res_dir']
-                
+
                 test_metrics, conf_mat, config = test_model(model_test, i, config, device, path, fold+1)
 
                 save_results(fold + 1, test_metrics, conf_mat, config, year)
@@ -368,14 +364,30 @@ def main(config):
 
         else:
             loaders = get_test_loaders(dt, config['kfold'],config)
-            for fold, loader_fold in enumerate(loaders):
+            for fold, (val_loader, test_loader) in enumerate(loaders):
                 print("Fold: {} ".format(fold + 1))
-                for year, loader in enumerate(loader_fold):
+
+                model, model_config = model_definition(config, dt, test=False, year=year)
+                path = config['loaded_model']
+                config['N_params'] = model.param_ratio()
+                with open(os.path.join('conf.json'), 'w') as file:
+                    file.write(json.dumps(config, indent=4))
+                model = model.to(device)
+                model.apply(weight_init)
+
+                model.load_state_dict(
+                    torch.load(os.path.join(path, 'Fold_{}'.format(fold+1), 'model.pth.tar'))['state_dict'])
+                model.eval()
+
+                # model = ModelWithTemperature(model)
+                # model.set_temperature(val_loader)
+
+                for year, loader in enumerate(test_loader):
                     print("Année: {} ".format(config['year'][year]))
-                    model, model_config = model_definition(config, dt, test=True, year=year)
-                    path = config['loaded_model']
                     test_metrics, conf_mat, config = test_model(model, loader, config, device, path, fold+1)
                     save_test_mode_results(test_metrics, conf_mat, config, config['year'][year], fold+1)
+
+
         for year in config['year']:
             overall_performance_by_year(config, year)
         overall_performance(config)
@@ -393,7 +405,7 @@ if __name__ == '__main__':
                         help='Path to the folder where the results are saved.')
     parser.add_argument('--year', default=['2018', '2019', '2020'], type=str,
                         help='The year of the data you want to use')
-    parser.add_argument('--res_dir', default='./results/global_pred', help='Path to the folder where the results should be stored')
+    parser.add_argument('--res_dir', default='./results/test2', help='Path to the folder where the results should be stored')
     parser.add_argument('--num_workers', default=8, type=int, help='Number of data loading workers')
     parser.add_argument('--rdm_seed', default=1, type=int, help='Random seed')
     parser.add_argument('--device', default='cuda', type=str,
@@ -411,7 +423,7 @@ if __name__ == '__main__':
                         default='/home/FQuinton/Bureau/lightweight-temporal-attention-pytorch/models_saved/global',
                         type=str,
                         help='Path to the pre-trained model')
-    parser.add_argument('--save_pred', default=True, type=bool,
+    parser.add_argument('--save_pred', default=False, type=bool,
                         help='Save predictions by parcel during test')
     parser.add_argument('--save_pred_dir', default='/home/FQuinton/Bureau/data_pred_global',
                         help='Path to the folder where the results should be stored')
@@ -422,7 +434,7 @@ if __name__ == '__main__':
 
     # Training parameters
     parser.add_argument('--kfold', default=5, type=int, help='Number of folds for cross validation')
-    parser.add_argument('--epochs', default=30, type=int, help='Number of epochs per fold')
+    parser.add_argument('--epochs', default=1, type=int, help='Number of epochs per fold')
     parser.add_argument('--batch_size', default=128, type=int, help='Batch size')
     parser.add_argument('--lr', default=0.001, type=float, help='Learning rate')
     parser.add_argument('--gamma', default=1, type=float, help='Gamma parameter of the focal loss')
