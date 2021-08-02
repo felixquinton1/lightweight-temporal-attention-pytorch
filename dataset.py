@@ -164,6 +164,7 @@ class PixelSetData(data.Dataset):
 
             ef = torch.stack([ef for _ in range(data['input'][0].shape[0])], dim=0)
             data['input'] = (data['input'], ef)
+
         if self.extra_feature_temp is not None:
             temp_feat = np.zeros(self.num_classes, dtype=int)
             for i in self.years_list:

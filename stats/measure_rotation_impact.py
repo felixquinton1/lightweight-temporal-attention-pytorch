@@ -1,3 +1,4 @@
+
 import numpy as np
 import json
 import os
@@ -25,35 +26,23 @@ dic = {
     18: "Orge_S",
     19: "Paturage_boise"
 }
-pid = os.listdir('/home/FQuinton/Bureau/data_pred_global/2018/')
+pid = os.listdir('/home/FQuinton/Bureau/labels_embeddings/data_pred_global/2018/')
 file = "/home/FQuinton/Bureau/data_pse/META/labels.json"
 years = ['2018', '2019', '2020']
 js = {}
-# with open(file) as f:
-#     data = json.load(f)
-#     for id in tqdm(pid):
-#         x = np.load('/home/FQuinton/Bureau/data_pred_labels_0_padding/2020/' + id)
-#         y = np.load('/home/FQuinton/Bureau/data_pred_global/2020/' + id)
-#         classe_2018 = data['CODE9_2018'][id[:-4]]
-#         classe_2019 = data['CODE9_2019'][id[:-4]]
-#         classe_2020 = data['CODE9_2020'][id[:-4]]
-#         if dic[np.argmax(x)] != dic[np.argmax(y)]:
-#             js[id[:-4]] = {'classe_2018' : dic[classe_2018],
-#                       'classe_2019' : dic[classe_2019],
-#                       'classe_2020' : dic[classe_2020],
-#                       'pred_lab' : dic[np.argmax(x)],
-#                       'pred_global': dic[np.argmax(y)]}
 
 with open(file) as f:
     data = json.load(f)
     for id in tqdm(pid):
-        x = np.load('/home/FQuinton/Bureau/data_pred_labels_0_padding/2020/' + id)
-        y = np.load('/home/FQuinton/Bureau/data_pred_global/2020/' + id)
+        x = np.load('/home/FQuinton/Bureau/labels_embeddings/data_pred_labels_0_padding/2020/' + id)
+        y = np.load('/home/FQuinton/Bureau/labels_embeddings/data_pred_global/2020/' + id)
+        z = np.load('/home/FQuinton/Bureau/labels_embeddings/data_pred_labels_only/2020/' + id)
         classe_2018 = data['CODE9_2018'][id[:-4]]
         classe_2019 = data['CODE9_2019'][id[:-4]]
         classe_2020 = data['CODE9_2020'][id[:-4]]
         pred_classe_x = dic[np.argmax(x)]
         pred_classe_y = dic[np.argmax(y)]
+        pred_classe_z = dic[np.argmax(z)]
         pred_x = x[classe_2020]
         pred_y = y[classe_2020]
         js[id[:-4]] = {'classe_2018': dic[classe_2018],
@@ -62,6 +51,7 @@ with open(file) as f:
                   'pred_lab' : pred_x,
                   'pred_lab_max': pred_classe_x,
                   'pred_global_max': pred_classe_y,
+                  'pred_struct_max': pred_classe_z,
                   'pred_global': pred_y}
 
 

@@ -226,9 +226,11 @@ def pad_collate(batch):
         if len(elem.shape) > 0:
             sizes = [e.shape[0] for e in batch]
             m = max(sizes)
-            # if not all(s == m for s in sizes):
+            if all(s == 20 for s in sizes):
+                batch = [pad_tensor(e, m) for e in batch]
                 # pad tensors which have a temporal dimension
-            batch = [pad_tensor(e, 36) for e in batch]
+            else:
+                batch = [pad_tensor(e, 36) for e in batch]
         if torch.utils.data.get_worker_info() is not None:
             # If we're in a background process, concatenate directly into a
             # shared memory tensor to avoid an extra copy
