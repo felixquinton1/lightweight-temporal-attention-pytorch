@@ -38,9 +38,13 @@ with open(file) as f:
     moyenne_rot = 0
     m = 0
     t = 0
+
+
+    moyenne_dif = 0
     mean = np.zeros(20)
     for key,value in data.items():
         compteur2[dic[value['classe_2020']]] += 1
+
         # if value['pred_struct_max'] == value['classe_2020']:
         #     if value['pred_global_max'] != value['classe_2020'] or value['pred_lab_max'] != value['classe_2020'] :
         compteur[dic[value['classe_2020']]] += 1
@@ -76,7 +80,6 @@ print(moyenne/(1-moyenne_glob))
 print(np.nanmean(moyenne/(1-moyenne_glob)))
 
 print(compteur/compteur2)
-
 
 
 print('no_rot')

@@ -2,7 +2,7 @@ import copy
 
 import numpy as np
 import torch
-mat = torch.Tensor(np.load('/home/FQuinton/Bureau/data_pse/META/stats.npy')).int()
+mat = torch.Tensor(np.load('/home/FQuinton/Bureau/data_pse/META/transition_matrix.npy')).int()
 
 dic = {
     0: "Prairie",
