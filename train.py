@@ -76,7 +76,7 @@ def evaluation(model, criterion, loader, device, config, mode='val', fold=None):
             else:
                 prediction = model(x)
 
-            if (config['save_pred']):
+            if (config['save_pred'] and mode == 'test'):
                 for i, id in enumerate(data['pid']):
                     exp_pred = torch.exp(prediction[i])
                     pred = torch.div(exp_pred, torch.sum(exp_pred)).tolist()
@@ -378,8 +378,8 @@ def main(config):
                 model.load_state_dict(
                     torch.load(os.path.join(path, 'Fold_{}'.format(fold+1), 'model.pth.tar'))['state_dict'])
                 model.eval()
-                model = ModelWithTemperature(model)
-                model.set_temperature(val_loader)
+                # model = ModelWithTemperature(model)
+                # model.set_temperature(val_loader)
                 np.random.seed(config['rdm_seed'])
                 torch.manual_seed(config['rdm_seed'])
                 for year, loader in enumerate(test_loader):
@@ -405,7 +405,7 @@ if __name__ == '__main__':
                         help='Path to the folder where the results are saved.')
     parser.add_argument('--year', default=['2018', '2019', '2020'], type=str,
                         help='The year of the data you want to use')
-    parser.add_argument('--res_dir', default='./results/pred_labels_0_padding', help='Path to the folder where the results should be stored')
+    parser.add_argument('--res_dir', default='./results/test2', help='Path to the folder where the results should be stored')
     parser.add_argument('--num_workers', default=8, type=int, help='Number of data loading workers')
     parser.add_argument('--rdm_seed', default=1, type=int, help='Random seed')
     parser.add_argument('--device', default='cuda', type=str,
@@ -420,12 +420,12 @@ if __name__ == '__main__':
     parser.add_argument('--test_mode', default=True, type=bool,
                         help='Load a pre-trained model and test on the whole data set')
     parser.add_argument('--loaded_model',
-                        default='/home/FQuinton/Bureau/lightweight-temporal-attention-pytorch/models_saved/labels_0_padding',
+                        default='/home/FQuinton/Bureau/lightweight-temporal-attention-pytorch/models_saved/global',
                         type=str,
                         help='Path to the pre-trained model')
     parser.add_argument('--save_pred', default=True, type=bool,
                         help='Save predictions by parcel during test')
-    parser.add_argument('--save_pred_dir', default='/home/FQuinton/Bureau/labels_embeddings/data_pred_labels_0_padding',
+    parser.add_argument('--save_pred_dir', default='/home/FQuinton/Bureau/labels_embeddings/test2',
                         help='Path to the folder where the results should be stored')
     parser.add_argument('--save_embedding', default=False, type=bool,
                         help='Save embeddings by parcel during test')
@@ -468,7 +468,7 @@ if __name__ == '__main__':
 
 
     ## Classifier
-    parser.add_argument('--tempfeat', default=True, type=bool,
+    parser.add_argument('--tempfeat', default=False, type=bool,
                         help='If true the past years labels are used before classification PSE.')
     parser.add_argument('--num_classes', default=20, type=int, help='Number of classes')
     parser.add_argument('--mlp4', default='[128, 64, 32, 20]', type=str, help='Number of neurons in the layers of MLP4')
