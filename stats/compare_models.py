@@ -1,6 +1,7 @@
 import json
 import numpy as np
 file = '/home/FQuinton/Bureau/data_pse/META/stats/compare_pred_value.json'
+import matplotlib.pyplot as plt
 
 dic = {
     "Prairie": 0,
@@ -45,9 +46,10 @@ with open(file) as f:
     moyenne_dif = 0
     mean = np.zeros(20)
     for key,value in data.items():
-        compteur2[dic[value['classe_2020']]] += 1
 
-        # if value['pred_struct_max'] == value['classe_2020']:
+
+        if value['pred_struct_max'] == value['classe_2020']:
+            compteur2[dic[value['classe_2020']]] += 1
         #     if value['pred_global_max'] != value['classe_2020'] or value['pred_lab_max'] != value['classe_2020'] :
         compteur[dic[value['classe_2020']]] += 1
         moyenne[dic[value['classe_2020']]] += value['pred_lab'] - value['pred_global']
@@ -81,23 +83,35 @@ with open(file) as f:
 # print(np.array(med)/(1 - np.array(med_all)))
 #
 # print(np.nanmean(np.array(med)/(1 - np.array(med_all))))
-
-
-print('tot: ')
-print(moyenne)
+# print('mall')
+#
+# print('mdec')
+#
+# print('tot: ')
+# print(moyenne)
 # print(np.nanmean(moyenne))
 #
-# print('moyenne labels')
-# print(moyenne_lab)
+print('moyenne labels')
+print(moyenne_lab)
+print(np.mean(moyenne_lab))
 #
 print('moyenne global')
 print(moyenne_glob)
 #
-# print('ratio')
+print('ratio')
 print(moyenne/(1-moyenne_glob))
 print(np.nanmean(moyenne/(1-moyenne_glob)))
 #
-# print(compteur/compteur2)
+print(compteur2/compteur)
+
+
+plt.scatter(compteur2/compteur*100, 100*moyenne/(1-moyenne_glob), color='#FF9966')
+
+plt.xlabel('Proportion determinée par le passé')
+plt.ylabel('rho_k')
+
+
+plt.show()
 
 #
 # print('no_rot')

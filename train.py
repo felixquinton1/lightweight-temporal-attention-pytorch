@@ -171,16 +171,24 @@ def model_definition(config, dt, test=False, year=None):
     return model, model_config
 
 def test_model(model, loader, config, device, path ,fold):
-
-
-    # new_state_dict = torch.load(os.path.join(path,'Fold_{}'.format(fold), 'model.pth.tar'))
-    # model_dict = {k: v for k, v in model.state_dict().items() if k != 'temporal_encoder.position_enc.weight'}
-    # model_dict_copy = {k: v for k, v in model.state_dict().items()}
-    # compatible_dict = {k: v for k, v in new_state_dict['state_dict'].items() if k in model_dict}
-    # model_dict_copy.update(compatible_dict)
-    # model.load_state_dict(model_dict_copy)
+   ################
+    config['N_params'] = model.param_ratio()
+    with open(os.path.join('conf.json'), 'w') as file:
+        file.write(json.dumps(config, indent=4))
+    model = model.to(device)
+    model.apply(weight_init)
+    ##################
 
     criterion = FocalLoss(config['gamma'])
+    #################
+    new_state_dict = torch.load(os.path.join(path, 'Fold_{}'.format(fold), 'model.pth.tar'))
+    model_dict = {k: v for k, v in model.state_dict().items() if k != 'temporal_encoder.position_enc.weight'}
+    model_dict_copy = {k: v for k, v in model.state_dict().items()}
+    compatible_dict = {k: v for k, v in new_state_dict['state_dict'].items() if k in model_dict}
+    model_dict_copy.update(compatible_dict)
+    model.load_state_dict(model_dict_copy)
+    model.eval()
+    ##################
     test_metrics, conf_mat = evaluation(model, criterion, loader, device=device, mode='test', config=config, fold=fold)
     
     print('Loss {:.4f},  Acc {:.2f},  IoU {:.4f}'.format(test_metrics['test_loss'], test_metrics['test_accuracy'],
@@ -378,8 +386,8 @@ def main(config):
                 model.load_state_dict(
                     torch.load(os.path.join(path, 'Fold_{}'.format(fold+1), 'model.pth.tar'))['state_dict'])
                 model.eval()
-                # model = ModelWithTemperature(model)
-                # model.set_temperature(val_loader)
+                model = ModelWithTemperature(model)
+                model.set_temperature(val_loader)
                 np.random.seed(config['rdm_seed'])
                 torch.manual_seed(config['rdm_seed'])
                 for year, loader in enumerate(test_loader):
@@ -403,9 +411,9 @@ if __name__ == '__main__':
     # Set-up parameters
     parser.add_argument('--dataset_folder', default='/home/FQuinton/Bureau/data_pse', type=str,
                         help='Path to the folder where the results are saved.')
-    parser.add_argument('--year', default=['2018', '2019', '2020'], type=str,
+    parser.add_argument('--year', default=['2018','2019','2020'], type=str,
                         help='The year of the data you want to use')
-    parser.add_argument('--res_dir', default='./results/test2', help='Path to the folder where the results should be stored')
+    parser.add_argument('--res_dir', default='./results/global_safe_check', help='Path to the folder where the results should be stored')
     parser.add_argument('--num_workers', default=8, type=int, help='Number of data loading workers')
     parser.add_argument('--rdm_seed', default=1, type=int, help='Random seed')
     parser.add_argument('--device', default='cuda', type=str,
@@ -417,7 +425,7 @@ if __name__ == '__main__':
     parser.set_defaults(preload=False)
 
     #Parameters relatives to test
-    parser.add_argument('--test_mode', default=True, type=bool,
+    parser.add_argument('--test_mode', default=False, type=bool,
                         help='Load a pre-trained model and test on the whole data set')
     parser.add_argument('--loaded_model',
                         default='/home/FQuinton/Bureau/lightweight-temporal-attention-pytorch/models_saved/global',
@@ -425,7 +433,7 @@ if __name__ == '__main__':
                         help='Path to the pre-trained model')
     parser.add_argument('--save_pred', default=True, type=bool,
                         help='Save predictions by parcel during test')
-    parser.add_argument('--save_pred_dir', default='/home/FQuinton/Bureau/labels_embeddings/test2',
+    parser.add_argument('--save_pred_dir', default='/home/FQuinton/Bureau/labels_embeddings/global_safe_check',
                         help='Path to the folder where the results should be stored')
     parser.add_argument('--save_embedding', default=False, type=bool,
                         help='Save embeddings by parcel during test')
