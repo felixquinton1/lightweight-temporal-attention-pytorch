@@ -413,7 +413,7 @@ if __name__ == '__main__':
                         help='Path to the folder where the results are saved.')
     parser.add_argument('--year', default=['2018','2019','2020'], type=str,
                         help='The year of the data you want to use')
-    parser.add_argument('--res_dir', default='./results/global_safe_check', help='Path to the folder where the results should be stored')
+    parser.add_argument('--res_dir', default='./results/labels_safe_check', help='Path to the folder where the results should be stored')
     parser.add_argument('--num_workers', default=8, type=int, help='Number of data loading workers')
     parser.add_argument('--rdm_seed', default=1, type=int, help='Random seed')
     parser.add_argument('--device', default='cuda', type=str,
@@ -433,7 +433,7 @@ if __name__ == '__main__':
                         help='Path to the pre-trained model')
     parser.add_argument('--save_pred', default=True, type=bool,
                         help='Save predictions by parcel during test')
-    parser.add_argument('--save_pred_dir', default='/home/FQuinton/Bureau/labels_embeddings/global_safe_check',
+    parser.add_argument('--save_pred_dir', default='/home/FQuinton/Bureau/labels_embeddings/labels_safe_check',
                         help='Path to the folder where the results should be stored')
     parser.add_argument('--save_embedding', default=False, type=bool,
                         help='Save embeddings by parcel during test')
@@ -476,7 +476,7 @@ if __name__ == '__main__':
 
 
     ## Classifier
-    parser.add_argument('--tempfeat', default=False, type=bool,
+    parser.add_argument('--tempfeat', default=True, type=bool,
                         help='If true the past years labels are used before classification PSE.')
     parser.add_argument('--num_classes', default=20, type=int, help='Number of classes')
     parser.add_argument('--mlp4', default='[128, 64, 32, 20]', type=str, help='Number of neurons in the layers of MLP4')

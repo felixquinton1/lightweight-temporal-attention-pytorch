@@ -157,15 +157,17 @@ if __name__ == "__main__":
     logging.basicConfig()
     logging.getLogger().setLevel(logging.INFO)
 
-    out_dir = "/mnt/71A36E2C77574D51/preprocess/"
+    out_dir = "/mnt/71A36E2C77574D51/preprocess2/"
     # out_dir = "C:/Users/felix/OneDrive/Bureau/test/out/"
     #out_dir = args.out_s2_dir
     if not exists(out_dir):
         makedirs(out_dir)
 
     # if not args.out_bands:
-    bands_10m = ["2", "3", "4", "8"]
-    bands_20m = ["5", "6", "7", "8A", "11", "12"]
+    # bands_10m = ["2", "3", "4", "8"]
+    # bands_20m = ["5", "6", "7", "8A", "11", "12"]
+    bands_10m = ["2", "3", "4"]
+    bands_20m = []
     out_bands = bands_10m + bands_20m
     # else:
     #     out_bands = args.out_bands
@@ -188,8 +190,8 @@ if __name__ == "__main__":
         with rasterio.open(in_band_1) as band_1:
             kwds = band_1.profile
         scale = 2
-        kwds.update(count=len(out_bands), dtype='uint16')
-        with rasterio.open('/mnt/71A36E2C77574D51/preprocess/tif/' + tif_name + '.tif', 'w', **kwds) as dest:
+        kwds.update(count=len(out_bands), dtype='int16')
+        with rasterio.open('/mnt/71A36E2C77574D51/preprocess2/tif/' + tif_name + '.tif', 'w', **kwds) as dest:
         # with rasterio.open('C:/Users/felix/OneDrive/Bureau/test/out/preproj/' + tif_name + '.tif', 'w', **kwds) as dest:
             for idx, band in enumerate(out_bands):
                 in_band_path = theia_get_band(theia_archive, band)
@@ -209,12 +211,12 @@ if __name__ == "__main__":
                             (in_band.height / data.shape[-2]))
                         profile = in_band.profile
                         profile.update(transform=transform, driver='GTiff', height=height, width=width, crs=in_band.crs)
-                        with rasterio.open('/mnt/71A36E2C77574D51/preprocess/10m/' + str(idx) + '.tif',
+                        with rasterio.open('/mnt/71A36E2C77574D51/preprocess2/10m/' + str(idx) + '.tif',
                                            'w', **profile) as step:
                         # with rasterio.open('C:/Users/felix/OneDrive/Bureau/test/out/10m/' + str(idx) + '.tif',
                         #                    'w', **profile) as step:
                             step.write(data)
-                        with rasterio.open('/mnt/71A36E2C77574D51/preprocess/10m/' + str(idx) + '.tif')\
+                        with rasterio.open('/mnt/71A36E2C77574D51/preprocess2/10m/' + str(idx) + '.tif')\
                                 as resampled_band:
                         # with rasterio.open('C:/Users/felix/OneDrive/Bureau/test/out/10m/' + str(idx) + '.tif') \
                         #         as resampled_band:

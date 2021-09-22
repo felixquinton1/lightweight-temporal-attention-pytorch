@@ -259,24 +259,26 @@ class PixelSetData_classifier_only(data.Dataset):
 
 
         emb_feat = []
-
+        l = np.size(x0)
         for i in self.years_list:
             shift = int(self.pid[item][-4:]) - int(i)
             if shift >= 1:
-                emb_feat.append(np.load(os.path.join(self.data_folder, i, '{}.npy'.format(self.pid[item][:-5]))))
-
-        if len(emb_feat) == 0:
-            emb_feat = np.zeros(np.size(x0))
-        elif len(emb_feat) == 1:
-            emb_feat = emb_feat[0]
-        else:
-            emb_feat = np.mean(emb_feat, axis=0)
-        x = np.concatenate((x0, emb_feat))
+                x0 = np.concatenate((x0,np.load(os.path.join(self.data_folder, i, '{}.npy'.format(self.pid[item][:-5])))))
+                # emb_feat.append(np.load(os.path.join(self.data_folder, i, '{}.npy'.format(self.pid[item][:-5]))))
+            elif shift != 0:
+                x0 = np.concatenate((x0,np.zeros(l)))
+        # if len(emb_feat) == 0:
+        #     emb_feat = np.zeros(np.size(x0))
+        # elif len(emb_feat) == 1:
+        #     emb_feat = emb_feat[0]
+        # else:
+        #     emb_feat = np.mean(emb_feat, axis=0)
+        # x = np.concatenate((x0, emb_feat))
 
         # if self.jitter is not None:
         #     sigma, clip = self.jitter
         #     x = x + np.clip(sigma * np.random.randn(*x.shape), -1 * clip, clip)
-
+        x = x0
         data = {'input': Tensor(x)}
 
         if self.return_id:
