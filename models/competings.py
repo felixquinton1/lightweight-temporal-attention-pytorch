@@ -92,22 +92,9 @@ class TempConv(nn.Module):
         else:
             self.positional_encoder = None
 
-        # if positions is not None:
-        #     self.position_enc = nn.Embedding.from_pretrained(
-        #         get_sinusoid_encoding_table(positions, input_size, T=1000),
-        #         freeze=True)
-        # else:
-        #     self.position_enc = None
 
-
-    def forward(self, input, batch_positions=None, pad_mask=None):
+    def forward(self, input, batch_positions=None):
         sz_b, seq_len, _ = input.shape
-        # if self.position_enc is not  None:
-        #     src_pos = torch.arange(1, seq_len + 1, dtype=torch.long).expand(sz_b, seq_len).to(input.device)
-        #     enc_output = input + self.position_enc(src_pos)
-        # else:
-        #     enc_output = input
-
 
         if self.positional_encoder is not None:
             enc_output = input + self.positional_encoder(batch_positions).to(input.device)

@@ -1,5 +1,5 @@
 import json
-
+#permet d'obtenir les dates pour chaque année du jeu de données.
 dates = "/home/FQuinton/Bureau/data_pse/META/dates.json"
 
 dt = {"2018": {},

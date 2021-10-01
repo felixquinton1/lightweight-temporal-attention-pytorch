@@ -1,5 +1,5 @@
 import json
-
+#Associe chaque classe à un entier pour chaque parcelle.
 labels = "/home/FQuinton/Bureau/data_pse/META/labels_str.json"
 
 labels_int = {'CODE9_2018':{},
