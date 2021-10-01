@@ -39,7 +39,6 @@ class TemporalAttentionEncoder(nn.Module):
 
         super(TemporalAttentionEncoder, self).__init__()
         self.in_channels = in_channels
-        # self.positions = positions
         self.n_neurons = copy.deepcopy(n_neurons)
         self.return_att = return_att
         self.name = 'TAE_dk{}_{}Heads_{}_T{}_do{}'.format(d_k, n_head, '|'.join(list(map(str, self.n_neurons))), T,
@@ -67,7 +66,6 @@ class TemporalAttentionEncoder(nn.Module):
             n_head=n_head, d_k=d_k, d_in=self.d_model)
 
         assert (self.n_neurons[0] == n_head * self.d_model)
-        #assert (self.n_neurons[-1] == self.d_model)
         layers = []
         for i in range(len(self.n_neurons) - 1):
             layers.extend([nn.Linear(self.n_neurons[i], self.n_neurons[i + 1]),

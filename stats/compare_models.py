@@ -3,6 +3,9 @@ import numpy as np
 file = '/home/FQuinton/Bureau/data_pse/META/stats/compare_pred_value.json'
 import matplotlib.pyplot as plt
 
+#Permet de comparer les performances de deux modèles
+
+
 dic = {
     "Prairie": 0,
     "Triticale": 1,

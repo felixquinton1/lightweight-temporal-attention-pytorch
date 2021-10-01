@@ -3,6 +3,8 @@ import os
 import pickle as pkl
 from tqdm import tqdm
 
+#Permet d'obtenir les valeurs de normalisation d'un jeu de données par bande spectrale et par an.
+
 dir = ['/home/FQuinton/Bureau/data_pse/DATA/2018/', '/home/FQuinton/Bureau/data_pse/DATA/2019/',
        '/home/FQuinton/Bureau/data_pse/DATA/2020/']
 

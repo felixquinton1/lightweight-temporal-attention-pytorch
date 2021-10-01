@@ -1,13 +1,9 @@
-import argparse
-import logging
-
 import os
-from os import listdir, remove, makedirs
-from os.path import isdir, isfile, join, exists
 import rasterio.shutil
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 
-from zipfile import ZipFile
+#Semble permettre de reprojetter un tif
+
 if __name__ == "__main__":
     dst_crs = 'EPSG:2154'
     for tif_name in os.listdir('/mnt/71A36E2C77574D51/donnees/out/preproj/'):

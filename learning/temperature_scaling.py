@@ -46,7 +46,7 @@ class ModelWithTemperature(nn.Module):
             print('Validation')
             for input, label in tqdm(valid_loader):
                 # input = input.cuda()
-                input = recursive_todevice2(input, 'cuda')
+                input = recursive_to_device_temp(input, 'cuda')
                 logits = self.model(input)
                 logits_list.append(logits)
                 labels_list.append(label)
@@ -116,12 +116,12 @@ class _ECELoss(nn.Module):
 
         return ece
 
-def recursive_todevice2(x, device):
+def recursive_to_device_temp(x, device):
     if type(x).__name__ == 'str':
         return x
     elif isinstance(x, torch.Tensor):
         return x.to(device)
     elif isinstance(x, dict):
-        return {k: recursive_todevice2(v, device) for k, v in x.items()}
+        return {k: recursive_to_device_temp(v, device) for k, v in x.items()}
     else:
-        return [recursive_todevice2(c, device) for c in x]
+        return [recursive_to_device_temp(c, device) for c in x]

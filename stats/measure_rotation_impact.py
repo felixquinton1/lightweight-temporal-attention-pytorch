@@ -3,6 +3,9 @@ import numpy as np
 import json
 import os
 from tqdm import tqdm
+
+#Stocke les classes prédites et probabilitées de prédictions dans un json
+
 np.random.seed(1)
 dic = {
     0: "Prairie",

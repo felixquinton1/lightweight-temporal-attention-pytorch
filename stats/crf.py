@@ -2,6 +2,9 @@ import os
 import json
 from tqdm import tqdm
 import numpy as np
+
+#Permet de calculer de nouvelles probabilités à partir d'un crf
+
 pid = os.listdir('/home/FQuinton/Bureau/labels_embeddings/data_pred_global/2020/')
 file = "/home/FQuinton/Bureau/data_pse/META/labels.json"
 transition_matrix1 = np.load('/home/FQuinton/Bureau/data_pse/META/transition_matrix_0.npy')

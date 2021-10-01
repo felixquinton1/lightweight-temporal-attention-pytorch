@@ -1,6 +1,7 @@
 import json
 import os
-# date = "C:/Users/felix/OneDrive/Bureau/test/out/dataset_preparation/META/dates.json"
+#Change le format des dates.
+
 dates = {}
 dir = "/mnt/71A36E2C77574D51/preprocess/tif_2018/"
 dir2 = "/mnt/71A36E2C77574D51/preprocess/tif_2019/"

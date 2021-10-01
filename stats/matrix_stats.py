@@ -2,6 +2,9 @@ import copy
 
 import numpy as np
 import torch
+
+#Permet d'obtenir des statistiques sur les rotations les plus fréquentes
+
 mat = torch.Tensor(np.load('/home/FQuinton/Bureau/data_pse/META/transition_matrix.npy')).int()
 
 dic = {

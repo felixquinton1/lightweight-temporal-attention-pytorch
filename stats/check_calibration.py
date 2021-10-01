@@ -4,6 +4,10 @@ from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
 import math
+
+#Permet de verifier la qualité de la calibration d'un modèle
+
+
 pid = os.listdir('/home/FQuinton/Bureau/labels_embeddings/test/2020/')
 file = "/home/FQuinton/Bureau/data_pse/META/labels.json"
 years = ['2018','2019','2020']

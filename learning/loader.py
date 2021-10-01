@@ -6,160 +6,8 @@ from torch.nn import functional as F
 import collections.abc
 import re
 
+
 def get_loaders(dt, kfold, config):
-    indices = list(range(len(dt)))
-    np.random.shuffle(indices)
-
-    kf = KFold(n_splits=kfold, shuffle=False)
-    indices_seq = list(kf.split(list(range(len(dt)))))
-    ntest = len(indices_seq[0][1])
-
-    loader_seq = []
-    for trainval, test_indices in indices_seq:
-        trainval = [indices[i] for i in trainval]
-        test_indices = [indices[i] for i in test_indices]
-
-        validation_indices = trainval[-ntest:]
-        train_indices = trainval[:-ntest]
-
-        train_sampler = data.sampler.SubsetRandomSampler(train_indices)
-        validation_sampler = data.sampler.SubsetRandomSampler(validation_indices)
-        test_sampler = data.sampler.SubsetRandomSampler(test_indices)
-
-        train_loader = data.DataLoader(dt, batch_size=config['batch_size'],
-                                       sampler=train_sampler,
-                                       num_workers=config['num_workers'], drop_last=True)
-        validation_loader = data.DataLoader(dt, batch_size=config['batch_size'],
-                                            sampler=validation_sampler,
-                                            num_workers=config['num_workers'], drop_last=True)
-        test_loader = data.DataLoader(dt, batch_size=config['batch_size'],
-                                      sampler=test_sampler,
-                                      num_workers=config['num_workers'], drop_last=True)
-
-        loader_seq.append((train_loader, validation_loader, test_loader))
-    return loader_seq
-
-def get_test_loaders(dt,kfold,config):
-
-    indices = [np.array(range(i * len(dt[i]), (i + 1) * len(dt[i]))) for i in range(len(dt))]
-    np.random.shuffle(indices[0])
-    if len(indices) > 1:
-        for i in range(1, len(indices)):
-            indices[i] = np.array(indices[0]) + len(indices[0]) * i
-
-    kf = KFold(n_splits=kfold, shuffle=False)
-    indices_seq = [list(kf.split(list(range(len(i))))) for i in dt]
-
-    ntest = len(indices_seq[0][0][1])
-    loader_seq = []
-    validation_indices = [[] for i in range(kfold)]
-
-    test_loader = [[] for i in range(kfold)]
-    merged_dt = dt[0]
-
-    for i in range(1, len(dt)):
-        merged_dt.date_positions.update(dt[i].date_positions)
-        merged_dt.pid += dt[i].pid
-        merged_dt.target += dt[i].target
-
-    for idx, dataset in enumerate(dt):
-        for id_fold, (trainval, test_indices) in enumerate(indices_seq[idx]):
-            trainval = [indices[idx][i] for i in trainval]
-            test_indices = [indices[idx][i] for i in test_indices]
-
-            test_sampler = data.sampler.SubsetRandomSampler(test_indices)
-
-            test_loader[id_fold].append(data.DataLoader(merged_dt, batch_size=config['batch_size'],
-                                                        sampler=test_sampler,
-                                                        num_workers=config['num_workers'],
-                                                        collate_fn=pad_collate))
-            validation_indices[id_fold] += trainval[-ntest:]
-    for i in range(kfold):
-        validation_sampler = data.sampler.SubsetRandomSampler(validation_indices[i])
-        validation_loader = data.DataLoader(merged_dt, batch_size=config['batch_size'],
-                                            sampler=validation_sampler,
-                                            num_workers=config['num_workers'], collate_fn=pad_collate)
-        loader_seq.append((validation_loader, test_loader[i]))
-    return loader_seq
-
-def get_embedding_loaders(dt,config):
-
-    indices = [np.array(range(i * len(dt[i]), (i + 1) * len(dt[i]))) for i in range(len(dt))]
-    np.random.shuffle(indices[0])
-    if len(indices) > 1:
-        for i in range(1, len(indices)):
-            indices[i] = np.array(indices[0]) + len(indices[0]) * i
-
-    test_loader = []
-    merged_dt = dt[0]
-
-    for i in range(1, len(dt)):
-        merged_dt.date_positions.update(dt[i].date_positions)
-        merged_dt.pid += dt[i].pid
-        merged_dt.target += dt[i].target
-
-    for idx, dataset in enumerate(dt):
-        test_indices = indices[idx]
-
-        test_sampler = data.sampler.SubsetRandomSampler(test_indices)
-
-        test_loader.append(data.DataLoader(merged_dt, batch_size=config['batch_size'],
-                                                    sampler=test_sampler,
-                                                    num_workers=config['num_workers'],
-                                                    collate_fn=pad_collate))
-    return test_loader
-
-def classif_only_loader(dt,kfold, fold, config):
-    indices = [np.array(range(i * len(dt[i]), (i + 1) * len(dt[i]))) for i in range(len(dt))]
-    np.random.shuffle(indices[0])
-    if len(indices) > 1:
-        for i in range(1, len(indices)):
-            indices[i] = np.array(indices[0]) + len(indices[0]) * i
-    kf = KFold(n_splits=kfold, shuffle=False)
-    indices_seq = [list(kf.split(list(range(len(i)))))[fold] for i in dt]
-    ntest = len(indices_seq[0][1])
-
-    loader_seq = []
-    test_loader = []
-    validation_indices = []
-    train_indices = []
-    merged_dt = dt[0]
-    for i in range(1, len(dt)):
-        merged_dt.pid += dt[i].pid
-        merged_dt.target += dt[i].target
-
-    for idx, dataset in enumerate(dt):
-        trainval = indices_seq[idx][0]
-        test_indices = indices_seq[idx][1]
-        trainval = [indices[idx][i] for i in trainval]
-        test_indices = [indices[idx][i] for i in test_indices]
-
-        test_sampler = data.sampler.SubsetRandomSampler(test_indices)
-
-        test_loader.append(data.DataLoader(merged_dt, batch_size=config['batch_size'],
-                                                    sampler=test_sampler,
-                                                    num_workers=config['num_workers'],
-                                                    collate_fn=pad_collate))
-        validation_indices += trainval[-ntest:]
-        train_indices += trainval[:-ntest]
-    train_sampler = data.sampler.SubsetRandomSampler(train_indices)
-    validation_sampler = data.sampler.SubsetRandomSampler(validation_indices)
-
-    train_loader = data.DataLoader(merged_dt, batch_size=config['batch_size'],
-                                   sampler=train_sampler,
-                                   num_workers=config['num_workers'], collate_fn=pad_collate)
-    validation_loader = data.DataLoader(merged_dt, batch_size=config['batch_size'],
-                                        sampler=validation_sampler,
-                                        num_workers=config['num_workers'], collate_fn=pad_collate)
-
-    loader_seq.append(train_loader)
-    loader_seq.append(validation_loader)
-    loader_seq.append(test_loader)
-    return loader_seq, merged_dt
-
-
-
-def get_multi_years_loaders(dt, kfold, config):
     indices = [np.array(range(i * len(dt[i]), (i + 1) * len(dt[i]))) for i in range(len(dt))]
     np.random.shuffle(indices[0])
     if len(indices) > 1:
@@ -173,8 +21,9 @@ def get_multi_years_loaders(dt, kfold, config):
     loader_seq = []
     test_loader = [[] for i in range(kfold)]
     validation_indices = [[] for i in range(kfold)]
-    train_indices = [[] for i in range(kfold)]
+    train_indices = [[] for i in range(kfold)] #change
     merged_dt = dt[0]
+
     for i in range(1, len(dt)):
         merged_dt.date_positions.update(dt[i].date_positions)
         merged_dt.pid += dt[i].pid
@@ -182,9 +31,8 @@ def get_multi_years_loaders(dt, kfold, config):
 
     for idx, dataset in enumerate(dt):
         for id_fold, (trainval, test_indices) in enumerate(indices_seq[idx]):
-            trainval = [indices[idx][i] for i in trainval]
             test_indices = [indices[idx][i] for i in test_indices]
-
+            trainval = [indices[idx][i] for i in trainval]
             test_sampler = data.sampler.SubsetRandomSampler(test_indices)
 
             test_loader[id_fold].append(data.DataLoader(merged_dt, batch_size=config['batch_size'],
@@ -192,19 +40,24 @@ def get_multi_years_loaders(dt, kfold, config):
                                                         num_workers=config['num_workers'],
                                                         collate_fn=pad_collate))
             validation_indices[id_fold] += trainval[-ntest:]
-            train_indices[id_fold] += trainval[:-ntest]
-    for i in range(kfold):
-        train_sampler = data.sampler.SubsetRandomSampler(train_indices[i])
-        validation_sampler = data.sampler.SubsetRandomSampler(validation_indices[i])
 
-        train_loader = data.DataLoader(merged_dt, batch_size=config['batch_size'],
-                                       sampler=train_sampler,
-                                       num_workers=config['num_workers'], collate_fn=pad_collate)
+            if not config['test_mode']:
+                train_indices[id_fold] += trainval[:-ntest]
+
+    for i in range(kfold):
+        validation_sampler = data.sampler.SubsetRandomSampler(validation_indices[i])
         validation_loader = data.DataLoader(merged_dt, batch_size=config['batch_size'],
                                             sampler=validation_sampler,
                                             num_workers=config['num_workers'], collate_fn=pad_collate)
+        if config['test_mode']:
+            loader_seq.append((validation_loader, test_loader[i]))
+        else:
+            train_sampler = data.sampler.SubsetRandomSampler(train_indices[i])
+            train_loader = data.DataLoader(merged_dt, batch_size=config['batch_size'],
+                                           sampler=train_sampler,
+                                           num_workers=config['num_workers'], collate_fn=pad_collate)
+            loader_seq.append((train_loader, validation_loader, test_loader[i]))
 
-        loader_seq.append((train_loader, validation_loader, test_loader[i]))
     return loader_seq, merged_dt
 
 
@@ -226,11 +79,8 @@ def pad_collate(batch):
         if len(elem.shape) > 0:
             sizes = [e.shape[0] for e in batch]
             m = max(sizes)
-            # if all(s == 20 for s in sizes):
             batch = [pad_tensor(e, m) for e in batch]
-                # pad tensors which have a temporal dimension
-            # else:
-            #     batch = [pad_tensor(e, 36) for e in batch]
+
         if torch.utils.data.get_worker_info() is not None:
             # If we're in a background process, concatenate directly into a
             # shared memory tensor to avoid an extra copy

@@ -5,6 +5,9 @@ from sklearn.manifold import TSNE
 import json
 import seaborn as sns
 import matplotlib.pyplot as plt
+
+#Permet de calculer un TSNE à partir des embedding de différentes parcelles
+
 sns.set(rc={'figure.figsize':(11.7,8.27)})
 
 np.random.seed(1)

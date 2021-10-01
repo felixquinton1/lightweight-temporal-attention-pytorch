@@ -60,9 +60,7 @@ def crop_and_write(output_path, tifs, date_index, polygons, lab_rpg):
                 try:
                     # crop parcel
                     try:
-
                         crop, transform = rasterio.mask.mask(src, [p], crop=True, nodata=-1)
-                        # crop, transform = rasterio.mask.mask(src, [p], crop=True, nodata=np.iinfo(np.uint16).max)
                     except ValueError:
                         # Error when polygon does not complelety overlap raster, those (few) polygons are not included in the dataset
                         continue
@@ -160,7 +158,6 @@ def get_dates(input_folder):
 
 def prepare_output(output_path):
     os.makedirs(output_path, exist_ok=True)
-    # os.makedirs(os.path.join(output_path, 'DATA'), exist_ok=True)
     os.makedirs(os.path.join(output_path, 'META'), exist_ok=True)
     os.makedirs(os.path.join(output_path, 'DATA', '2018'), exist_ok=True)
     os.makedirs(os.path.join(output_path, 'DATA', '2019'), exist_ok=True)
@@ -168,12 +165,9 @@ def prepare_output(output_path):
 
 
 if __name__ == '__main__':
-    rpg_file = '/mnt/71A36E2C77574D51/preprocess/geojson/lpis_stable_all_years_reprojected.json'
-    input_folder = '/mnt/71A36E2C77574D51/preprocess/tif_2018/'
-    out_path = '/home/FQuinton/Bureau/data_pse2/'
+    rpg_file = 'path_to_the_json'
+    input_folder = 'path_to_the_tifs'
+    out_path = 'path_of_the_output'
 
-    # rpg_file = 'C:/Users/felix/OneDrive/Bureau/test/out/lpis_stable_all_years_reprojected.json'
-    # input_folder = 'C:/Users/felix/OneDrive/Bureau/test/out/preproj/'
-    # out_path = 'C:/Users/felix/OneDrive/Bureau/test/out/dataset_preparation/'
 
     prepare_dataset(out_path, input_folder, rpg_file, label_names=['CODE9_2018', 'CODE9_2019', 'CODE9_2020'])

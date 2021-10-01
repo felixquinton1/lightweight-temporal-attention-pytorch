@@ -4,15 +4,7 @@ from tqdm import tqdm
 sizes = "/home/FQuinton/Bureau/data_pse/META/sizes.json"
 geojson_dic = "/home/FQuinton/Bureau/data_pse/META/geojson_dic.json"
 
-# geojson_dic = {}
-# with open(geojson) as g:
-#     geoj = json.load(g)['features']
-#     for i in geoj:
-#         geojson_dic[i['properties']['UID_2018']] = i['geometry']['coordinates'][0]
-#
-# with open('/home/FQuinton/Bureau/data_pse/META/geojson_dic.json',
-#           'w') as file:
-#     file.write(json.dumps(geojson_dic, indent=4))
+#Permet d'obtenir les features géomatriques de chaque parcelles.
 
 geomfeat = {}
 with open(sizes) as f:

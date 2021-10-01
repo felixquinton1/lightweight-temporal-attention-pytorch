@@ -1,14 +1,14 @@
 import copy
 import json
 
-from shapely.geometry import Polygon
 from tqdm import tqdm
 from pyproj import Transformer
+
+#Reprojette les données contenues dans le geojson
 
 
 
 if __name__ == '__main__':
-    # rpg_file = '/mnt/71A36E2C77574D51/donnees/out/GEOJSON/lpis_stable_all_years.geojson'
     rpg_file = 'C:/Users/felix/OneDrive/Bureau/test/out/lpis_stable_all_years.geojson'
     print('Reading RPG . . .')
     with open(rpg_file) as f:

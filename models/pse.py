@@ -8,7 +8,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import copy
-from models.positional_encoding import PositionalEncoder
 
 class PixelSetEncoder(nn.Module):
     def __init__(self, input_dim, mlp1=[10, 32, 64], pooling='mean_std', mlp2=[128, 128], with_extra=True,
